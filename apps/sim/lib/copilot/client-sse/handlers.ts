@@ -1,5 +1,5 @@
 import { createLogger } from '@sim/logger'
-import { COPILOT_CONFIRM_API_PATH, STREAM_STORAGE_KEY } from '@/lib/copilot/constants'
+import { STREAM_STORAGE_KEY } from '@/lib/copilot/constants'
 import { asRecord } from '@/lib/copilot/orchestrator/sse-utils'
 import type { SSEEvent } from '@/lib/copilot/orchestrator/types'
 import {
@@ -16,7 +16,7 @@ import { useWorkflowDiffStore } from '@/stores/workflow-diff/store'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'
 import { appendTextBlock, beginThinkingBlock, finalizeThinkingBlock } from './content-blocks'
-import { CLIENT_EXECUTABLE_RUN_TOOLS, executeRunToolOnClient } from './run-tool-execution'
+import { executeRunToolOnClient } from './run-tool-execution'
 import type { ClientContentBlock, ClientStreamingContext } from './types'
 
 const logger = createLogger('CopilotClientSseHandlers')
@@ -25,23 +25,6 @@ const TEXT_BLOCK_TYPE = 'text'
 const MAX_BATCH_INTERVAL = 50
 const MIN_BATCH_INTERVAL = 16
 const MAX_QUEUE_SIZE = 5
-
-/**
- * Send an auto-accept confirmation to the server for auto-allowed tools.
- * The server-side orchestrator polls Redis for this decision.
- */
-export function sendAutoAcceptConfirmation(toolCallId: string): void {
-  fetch(COPILOT_CONFIRM_API_PATH, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ toolCallId, status: 'accepted' }),
-  }).catch((error) => {
-    logger.warn('Failed to send auto-accept confirmation', {
-      toolCallId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  })
-}
 
 function writeActiveStreamToStorage(info: CopilotStreamInfo | null): void {
   if (typeof window === 'undefined') return
@@ -245,10 +228,6 @@ export const sseHandlers: Record<string, SSEHandler> = {
       const eventData = asRecord(data?.data)
       const toolCallId: string | undefined =
         data?.toolCallId || (eventData.id as string | undefined)
-      const success: boolean | undefined = data?.success
-      const failedDependency: boolean = data?.failedDependency === true
-      const resultObj = asRecord(data?.result)
-      const skipped: boolean = resultObj.skipped === true
       if (!toolCallId) return
       const { toolCallsById } = get()
       const current = toolCallsById[toolCallId]
@@ -260,11 +239,9 @@ export const sseHandlers: Record<string, SSEHandler> = {
         ) {
           return
         }
-        const targetState = success
-          ? ClientToolCallState.success
-          : failedDependency || skipped
-            ? ClientToolCallState.rejected
-            : ClientToolCallState.error
+        const targetState =
+          (data?.state as ClientToolCallState) ||
+          (data?.success ? ClientToolCallState.success : ClientToolCallState.error)
         const updatedMap = { ...toolCallsById }
         updatedMap[toolCallId] = {
           ...current,
@@ -469,6 +446,9 @@ export const sseHandlers: Record<string, SSEHandler> = {
         }
       }
 
+      const blockState =
+        (data?.state as ClientToolCallState) ||
+        (data?.success ? ClientToolCallState.success : ClientToolCallState.error)
       for (let i = 0; i < context.contentBlocks.length; i++) {
         const b = context.contentBlocks[i]
         if (b?.type === 'tool_call' && b?.toolCall?.id === toolCallId) {
@@ -478,19 +458,14 @@ export const sseHandlers: Record<string, SSEHandler> = {
             isBackgroundState(b.toolCall?.state)
           )
             break
-          const targetState = success
-            ? ClientToolCallState.success
-            : failedDependency || skipped
-              ? ClientToolCallState.rejected
-              : ClientToolCallState.error
           context.contentBlocks[i] = {
             ...b,
             toolCall: {
               ...b.toolCall,
-              state: targetState,
+              state: blockState,
               display: resolveToolDisplay(
                 b.toolCall?.name,
-                targetState,
+                blockState,
                 toolCallId,
                 b.toolCall?.params,
                 b.toolCall?.serverUI
@@ -512,8 +487,8 @@ export const sseHandlers: Record<string, SSEHandler> = {
       const errorData = asRecord(data?.data)
       const toolCallId: string | undefined =
         data?.toolCallId || (errorData.id as string | undefined)
-      const failedDependency: boolean = data?.failedDependency === true
       if (!toolCallId) return
+      const targetState = (data?.state as ClientToolCallState) || ClientToolCallState.error
       const { toolCallsById } = get()
       const current = toolCallsById[toolCallId]
       if (current) {
@@ -524,9 +499,6 @@ export const sseHandlers: Record<string, SSEHandler> = {
         ) {
           return
         }
-        const targetState = failedDependency
-          ? ClientToolCallState.rejected
-          : ClientToolCallState.error
         const updatedMap = { ...toolCallsById }
         updatedMap[toolCallId] = {
           ...current,
@@ -544,9 +516,6 @@ export const sseHandlers: Record<string, SSEHandler> = {
             isBackgroundState(b.toolCall?.state)
           )
             break
-          const targetState = failedDependency
-            ? ClientToolCallState.rejected
-            : ClientToolCallState.error
           context.contentBlocks[i] = {
             ...b,
             toolCall: {
@@ -577,15 +546,11 @@ export const sseHandlers: Record<string, SSEHandler> = {
     const { toolCallsById } = get()
 
     if (!toolCallsById[toolCallId]) {
-      const isAutoAllowed = get().isToolAutoAllowed(toolName)
-      const initialState = isAutoAllowed
-        ? ClientToolCallState.executing
-        : ClientToolCallState.pending
       const tc: CopilotToolCall = {
         id: toolCallId,
         name: toolName,
-        state: initialState,
-        display: resolveToolDisplay(toolName, initialState, toolCallId),
+        state: ClientToolCallState.generating,
+        display: resolveToolDisplay(toolName, ClientToolCallState.generating, toolCallId),
       }
       const updated = { ...toolCallsById, [toolCallId]: tc }
       set({ toolCallsById: updated })
@@ -604,7 +569,6 @@ export const sseHandlers: Record<string, SSEHandler> = {
     const isPartial = toolData.partial === true
     const { toolCallsById } = get()
 
-    // Extract copilot-provided UI metadata for fallback display
     const rawUI = (toolData.ui || data?.ui) as Record<string, unknown> | undefined
     const serverUI = rawUI
       ? {
@@ -616,10 +580,16 @@ export const sseHandlers: Record<string, SSEHandler> = {
 
     const existing = toolCallsById[id]
     const toolName = name || existing?.name || 'unknown_tool'
-    const isAutoAllowed = get().isToolAutoAllowed(toolName)
-    let initialState = isAutoAllowed ? ClientToolCallState.executing : ClientToolCallState.pending
 
-    // Avoid flickering back to pending on partial/duplicate events once a tool is executing.
+    const clientExecutable = rawUI?.clientExecutable === true
+
+    let initialState: ClientToolCallState
+    if (isPartial) {
+      initialState = existing?.state || ClientToolCallState.generating
+    } else {
+      initialState = (data?.state as ClientToolCallState) || ClientToolCallState.executing
+    }
+
     if (
       existing?.state === ClientToolCallState.executing &&
       initialState === ClientToolCallState.pending
@@ -636,6 +606,7 @@ export const sseHandlers: Record<string, SSEHandler> = {
           state: initialState,
           ...(args ? { params: args } : {}),
           ...(effectiveServerUI ? { serverUI: effectiveServerUI } : {}),
+          ...(clientExecutable ? { clientExecutable: true } : {}),
           display: resolveToolDisplay(toolName, initialState, id, args || existing.params, effectiveServerUI),
         }
       : {
@@ -644,6 +615,7 @@ export const sseHandlers: Record<string, SSEHandler> = {
           state: initialState,
           ...(args ? { params: args } : {}),
           ...(serverUI ? { serverUI } : {}),
+          ...(clientExecutable ? { clientExecutable: true } : {}),
           display: resolveToolDisplay(toolName, initialState, id, args, serverUI),
         }
     const updated = { ...toolCallsById, [id]: next }
@@ -657,23 +629,10 @@ export const sseHandlers: Record<string, SSEHandler> = {
       return
     }
 
-    // Auto-allowed tools: send confirmation to the server so it can proceed
-    // without waiting for the user to click "Allow".
-    if (isAutoAllowed) {
-      sendAutoAcceptConfirmation(id)
-    }
-
-    // Client-executable run tools: execute on the client for real-time feedback
-    // (block pulsing, console logs, stop button). The server defers execution
-    // for these tools in interactive mode; the client reports back via mark-complete.
-    if (
-      CLIENT_EXECUTABLE_RUN_TOOLS.has(toolName) &&
-      initialState === ClientToolCallState.executing
-    ) {
+    if (clientExecutable && initialState === ClientToolCallState.executing) {
       executeRunToolOnClient(id, toolName, args || existing?.params || {})
     }
 
-    // OAuth: dispatch event to open the OAuth connect modal
     if (toolName === 'oauth_request_access' && args && typeof window !== 'undefined') {
       try {
         window.dispatchEvent(

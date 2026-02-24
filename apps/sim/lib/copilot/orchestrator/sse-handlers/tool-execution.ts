@@ -4,7 +4,6 @@ import {
   TOOL_DECISION_MAX_POLL_MS,
   TOOL_DECISION_POLL_BACKOFF,
 } from '@/lib/copilot/constants'
-import { INTERRUPT_TOOL_SET } from '@/lib/copilot/orchestrator/config'
 import { getToolConfirmation } from '@/lib/copilot/orchestrator/persistence'
 import {
   asRecord,
@@ -20,10 +19,6 @@ import type {
 } from '@/lib/copilot/orchestrator/types'
 
 const logger = createLogger('CopilotSseToolExecution')
-
-export function isInterruptToolName(toolName: string): boolean {
-  return INTERRUPT_TOOL_SET.has(toolName)
-}
 
 export async function executeToolAndReport(
   toolCallId: string,
@@ -142,6 +137,7 @@ export async function executeToolAndReport(
 
     const errorEvent: SSEEvent = {
       type: 'tool_error',
+      state: 'error',
       toolCallId: toolCall.id,
       data: {
         id: toolCall.id,

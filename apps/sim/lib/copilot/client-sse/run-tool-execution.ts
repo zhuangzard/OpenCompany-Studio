@@ -11,17 +11,6 @@ import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 const logger = createLogger('CopilotRunToolExecution')
 
 /**
- * Run tools that execute client-side for real-time feedback
- * (block pulsing, logs, stop button, etc.).
- */
-export const CLIENT_EXECUTABLE_RUN_TOOLS = new Set([
-  'run_workflow',
-  'run_workflow_until_block',
-  'run_from_block',
-  'run_block',
-])
-
-/**
  * Execute a run tool on the client side using the streaming execute endpoint.
  * This gives full interactive feedback: block pulsing, console logs, stop button.
  *

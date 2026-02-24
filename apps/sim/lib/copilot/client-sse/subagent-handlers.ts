@@ -11,11 +11,10 @@ import { ClientToolCallState } from '@/lib/copilot/tools/client/tool-display-reg
 import type { CopilotStore, CopilotToolCall } from '@/stores/panel/copilot/types'
 import {
   type SSEHandler,
-  sendAutoAcceptConfirmation,
   sseHandlers,
   updateStreamingMessage,
 } from './handlers'
-import { CLIENT_EXECUTABLE_RUN_TOOLS, executeRunToolOnClient } from './run-tool-execution'
+import { executeRunToolOnClient } from './run-tool-execution'
 import type { ClientStreamingContext } from './types'
 
 const logger = createLogger('CopilotClientSubagentHandlers')
@@ -199,11 +198,16 @@ export const subAgentSSEHandlers: Record<string, SSEHandler> = {
     const existingToolCall =
       existingIndex >= 0 ? context.subAgentToolCalls[parentToolCallId][existingIndex] : undefined
 
-    // Auto-allowed tools skip pending state to avoid flashing interrupt buttons
-    const isAutoAllowed = get().isToolAutoAllowed(name)
-    let initialState = isAutoAllowed ? ClientToolCallState.executing : ClientToolCallState.pending
+    const rawUI = (toolData.ui || data?.ui) as Record<string, unknown> | undefined
+    const clientExecutable = rawUI?.clientExecutable === true
 
-    // Avoid flickering back to pending on partial/duplicate events once a tool is executing.
+    let initialState: ClientToolCallState
+    if (isPartial) {
+      initialState = existingToolCall?.state || ClientToolCallState.generating
+    } else {
+      initialState = (data?.state as ClientToolCallState) || ClientToolCallState.executing
+    }
+
     if (
       existingToolCall?.state === ClientToolCallState.executing &&
       initialState === ClientToolCallState.pending
@@ -216,6 +220,7 @@ export const subAgentSSEHandlers: Record<string, SSEHandler> = {
       name,
       state: initialState,
       ...(args ? { params: args } : {}),
+      ...(clientExecutable ? { clientExecutable: true } : {}),
       display: resolveToolDisplay(name, initialState, id, args),
     }
 
@@ -241,16 +246,7 @@ export const subAgentSSEHandlers: Record<string, SSEHandler> = {
       return
     }
 
-    // Auto-allowed tools: send confirmation to the server so it can proceed
-    // without waiting for the user to click "Allow".
-    if (isAutoAllowed) {
-      sendAutoAcceptConfirmation(id)
-    }
-
-    // Client-executable run tools: if auto-allowed, execute immediately for
-    // real-time feedback. For non-auto-allowed, the user must click "Allow"
-    // first — handleRun in tool-call.tsx triggers executeRunToolOnClient.
-    if (CLIENT_EXECUTABLE_RUN_TOOLS.has(name) && isAutoAllowed) {
+    if (clientExecutable && initialState === ClientToolCallState.executing) {
       executeRunToolOnClient(id, name, args || {})
     }
   },
@@ -261,21 +257,14 @@ export const subAgentSSEHandlers: Record<string, SSEHandler> = {
 
     const resultData = asRecord(data?.data)
     const toolCallId: string | undefined = data?.toolCallId || (resultData.id as string | undefined)
-    // Determine success: explicit `success` field takes priority; otherwise
-    // infer from presence of result data vs error (same logic as server-side
-    // inferToolSuccess).  The Go backend uses `*bool` with omitempty so
-    // `success` is present when explicitly set, and absent for non-tool events.
-    const hasExplicitSuccess = data?.success !== undefined || resultData.success !== undefined
-    const explicitSuccess = data?.success ?? resultData.success
-    const hasResultData = data?.result !== undefined || resultData.result !== undefined
-    const hasError = !!data?.error || !!resultData.error
-    const success: boolean = hasExplicitSuccess ? !!explicitSuccess : hasResultData && !hasError
     if (!toolCallId) return
 
     if (!context.subAgentToolCalls[parentToolCallId]) return
     if (!context.subAgentBlocks[parentToolCallId]) return
 
-    const targetState = success ? ClientToolCallState.success : ClientToolCallState.error
+    const targetState =
+      (data?.state as ClientToolCallState) ||
+      (data?.success ? ClientToolCallState.success : ClientToolCallState.error)
     const existingIndex = context.subAgentToolCalls[parentToolCallId].findIndex(
       (tc: CopilotToolCall) => tc.id === toolCallId
     )

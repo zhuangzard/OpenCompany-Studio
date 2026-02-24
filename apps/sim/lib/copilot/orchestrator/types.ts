@@ -17,6 +17,8 @@ export type SSEEventType =
 
 export interface SSEEvent {
   type: SSEEventType
+  /** Authoritative tool call state set by the Go backend */
+  state?: string
   data?: Record<string, unknown>
   subagent?: string
   toolCallId?: string
@@ -33,8 +35,6 @@ export interface SSEEvent {
   content?: string
   /** Set on reasoning events */
   phase?: string
-  /** Set on tool_result events */
-  failedDependency?: boolean
   /** UI metadata from copilot (title, icon, phaseLabel) */
   ui?: Record<string, unknown>
 }

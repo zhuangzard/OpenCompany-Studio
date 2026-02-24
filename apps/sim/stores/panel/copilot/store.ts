@@ -140,34 +140,6 @@ function updateActiveStreamEventId(
   writeActiveStreamToStorage(next)
 }
 
-const AUTO_ALLOWED_TOOLS_STORAGE_KEY = 'copilot_auto_allowed_tools'
-
-function readAutoAllowedToolsFromStorage(): string[] | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.localStorage.getItem(AUTO_ALLOWED_TOOLS_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return null
-    return parsed.filter((item): item is string => typeof item === 'string')
-  } catch (error) {
-    logger.warn('[AutoAllowedTools] Failed to read local cache', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return null
-  }
-}
-
-function writeAutoAllowedToolsToStorage(tools: string[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(AUTO_ALLOWED_TOOLS_STORAGE_KEY, JSON.stringify(tools))
-  } catch (error) {
-    logger.warn('[AutoAllowedTools] Failed to write local cache', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}
 
 function isToolAutoAllowedByList(toolId: string, autoAllowedTools: string[]): boolean {
   if (!toolId) return false
@@ -1037,8 +1009,6 @@ async function resumeFromLiveStream(
   return false
 }
 
-const cachedAutoAllowedTools = readAutoAllowedToolsFromStorage()
-
 // Initial state (subset required for UI/streaming)
 const initialState = {
   mode: 'build' as const,
@@ -1073,8 +1043,8 @@ const initialState = {
   streamingPlanContent: '',
   toolCallsById: {} as Record<string, CopilotToolCall>,
   suppressAutoSelect: false,
-  autoAllowedTools: cachedAutoAllowedTools ?? ([] as string[]),
-  autoAllowedToolsLoaded: cachedAutoAllowedTools !== null,
+  autoAllowedTools: [] as string[],
+  autoAllowedToolsLoaded: false,
   activeStream: null as CopilotStreamInfo | null,
   messageQueue: [] as import('./types').QueuedMessage[],
   suppressAbortContinueOption: false,
@@ -2416,7 +2386,6 @@ export const useCopilotStore = create<CopilotStore>()(
           const data = await res.json()
           const tools = data.autoAllowedTools ?? []
           set({ autoAllowedTools: tools, autoAllowedToolsLoaded: true })
-          writeAutoAllowedToolsToStorage(tools)
           logger.debug('[AutoAllowedTools] Loaded successfully', { count: tools.length, tools })
         } else {
           set({ autoAllowedToolsLoaded: true })
@@ -2442,7 +2411,6 @@ export const useCopilotStore = create<CopilotStore>()(
           logger.debug('[AutoAllowedTools] API returned', { toolId, tools: data.autoAllowedTools })
           const tools = data.autoAllowedTools ?? []
           set({ autoAllowedTools: tools, autoAllowedToolsLoaded: true })
-          writeAutoAllowedToolsToStorage(tools)
           logger.debug('[AutoAllowedTools] Added tool to store', { toolId })
         }
       } catch (err) {
@@ -2462,7 +2430,6 @@ export const useCopilotStore = create<CopilotStore>()(
           const data = await res.json()
           const tools = data.autoAllowedTools ?? []
           set({ autoAllowedTools: tools, autoAllowedToolsLoaded: true })
-          writeAutoAllowedToolsToStorage(tools)
           logger.debug('[AutoAllowedTools] Removed tool', { toolId })
         }
       } catch (err) {

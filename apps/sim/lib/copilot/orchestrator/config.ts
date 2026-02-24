@@ -1,28 +1,3 @@
-export const INTERRUPT_TOOL_NAMES = [
-  'set_global_workflow_variables',
-  'run_workflow',
-  'run_workflow_until_block',
-  'run_from_block',
-  'run_block',
-  'manage_mcp_tool',
-  'manage_custom_tool',
-  'deploy_mcp',
-  'deploy_chat',
-  'deploy_api',
-  'create_workspace_mcp_server',
-  'update_workspace_mcp_server',
-  'delete_workspace_mcp_server',
-  'delete_workflow',
-  'set_environment_variables',
-  'make_api_request',
-  'oauth_request_access',
-  'navigate_ui',
-  'knowledge_base',
-  'generate_api_key',
-] as const
-
-export const INTERRUPT_TOOL_SET = new Set<string>(INTERRUPT_TOOL_NAMES)
-
 export const SUBAGENT_TOOL_NAMES = [
   'debug',
   'edit',
