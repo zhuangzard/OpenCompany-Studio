@@ -7,6 +7,7 @@ import {
 } from '@/lib/core/security/input-validation.server'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { getBaseUrl, getInternalApiBaseUrl } from '@/lib/core/utils/urls'
+import { SIM_VIA_HEADER, serializeCallChain } from '@/lib/execution/call-chain'
 import { parseMcpToolId } from '@/lib/mcp/utils'
 import { isCustomTool, isMcpTool } from '@/executor/constants'
 import { resolveSkillContent } from '@/executor/handlers/agent/skills-resolver'
@@ -24,22 +25,41 @@ import {
 const logger = createLogger('Tools')
 
 /**
- * Normalizes a tool ID by stripping resource ID suffix (UUID).
+ * Normalizes a tool ID by stripping resource ID suffix (UUID/tableId).
  * Workflow tools: 'workflow_executor_<uuid>' -> 'workflow_executor'
  * Knowledge tools: 'knowledge_search_<uuid>' -> 'knowledge_search'
+ * Table tools: 'table_query_rows_<tableId>' -> 'table_query_rows'
  */
 function normalizeToolId(toolId: string): string {
-  // Check for workflow_executor_<uuid> pattern
   if (toolId.startsWith('workflow_executor_') && toolId.length > 'workflow_executor_'.length) {
     return 'workflow_executor'
   }
-  // Check for knowledge_<operation>_<uuid> pattern
+
   const knowledgeOps = ['knowledge_search', 'knowledge_upload_chunk', 'knowledge_create_document']
   for (const op of knowledgeOps) {
     if (toolId.startsWith(`${op}_`) && toolId.length > op.length + 1) {
       return op
     }
   }
+
+  const tableOps = [
+    'table_query_rows',
+    'table_insert_row',
+    'table_batch_insert_rows',
+    'table_update_row',
+    'table_update_rows_by_filter',
+    'table_delete_rows_by_filter',
+    'table_upsert_row',
+    'table_get_row',
+    'table_delete_row',
+    'table_get_schema',
+  ]
+  for (const op of tableOps) {
+    if (toolId.startsWith(`${op}_`) && toolId.length > op.length + 1) {
+      return op
+    }
+  }
+
   return toolId
 }
 
@@ -279,7 +299,10 @@ export async function executeTool(
       throw new Error(`Tool not found: ${toolId}`)
     }
 
-    // If we have a credential parameter, fetch the access token
+    if (contextParams.oauthCredential) {
+      contextParams.credential = contextParams.oauthCredential
+    }
+
     if (contextParams.credential) {
       logger.info(
         `[${requestId}] Tool ${toolId} needs access token for credential: ${contextParams.credential}`
@@ -303,7 +326,7 @@ export async function executeTool(
         if (workflowId) {
           tokenUrlObj.searchParams.set('workflowId', workflowId)
         }
-        if (userId) {
+        if (userId && contextParams._context?.enforceCredentialAccess) {
           tokenUrlObj.searchParams.set('userId', userId)
         }
 
@@ -311,7 +334,7 @@ export async function executeTool(
         const tokenHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
         if (typeof window === 'undefined') {
           try {
-            const internalToken = await generateInternalToken()
+            const internalToken = await generateInternalToken(userId)
             tokenHeaders.Authorization = `Bearer ${internalToken}`
           } catch (_e) {
             // Swallow token generation errors; the request will fail and be reported upstream
@@ -330,7 +353,15 @@ export async function executeTool(
             status: response.status,
             error: errorText,
           })
-          throw new Error(`Failed to fetch access token: ${response.status} ${errorText}`)
+          let parsedError = errorText
+          try {
+            const parsed = JSON.parse(errorText)
+            if (parsed.error) parsedError = parsed.error
+          } catch {
+            // Use raw text
+          }
+          const toolLabel = tool?.name || toolId
+          throw new Error(`Failed to obtain credential for ${toolLabel}: ${parsedError}`)
         }
 
         const data = await response.json()
@@ -359,10 +390,7 @@ export async function executeTool(
         logger.error(`[${requestId}] Error fetching access token for ${toolId}:`, {
           error: error instanceof Error ? error.message : String(error),
         })
-        // Re-throw the error to fail the tool execution if token fetching fails
-        throw new Error(
-          `Failed to obtain credential for tool ${toolId}: ${error instanceof Error ? error.message : String(error)}`
-        )
+        throw error
       }
     }
 
@@ -646,6 +674,13 @@ async function executeToolRequest(
 
     const headers = new Headers(requestParams.headers)
     await addInternalAuthIfNeeded(headers, isInternalRoute, requestId, toolId)
+
+    if (isInternalRoute) {
+      const callChain = params._context?.callChain as string[] | undefined
+      if (callChain && callChain.length > 0) {
+        headers.set(SIM_VIA_HEADER, serializeCallChain(callChain))
+      }
+    }
 
     // Check request body size before sending to detect potential size limit issues
     validateRequestBodySize(requestParams.body, requestId, toolId)
