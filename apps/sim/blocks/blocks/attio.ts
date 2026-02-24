@@ -325,7 +325,7 @@ YYYY-MM-DDTHH:mm:ss.SSSZ
 ### EXAMPLE
 2024-01-15T09:30:00.000Z`,
         placeholder: 'Describe the date...',
-        generationType: 'json-object',
+        generationType: 'timestamp',
       },
     },
     {
@@ -377,7 +377,7 @@ YYYY-MM-DDTHH:mm:ss.SSSZ
 ### EXAMPLE
 2024-12-01T15:00:00.000Z`,
         placeholder: 'Describe the deadline...',
-        generationType: 'json-object',
+        generationType: 'timestamp',
       },
     },
     {
@@ -794,7 +794,7 @@ YYYY-MM-DDTHH:mm:ss.SSSZ
 ### EXAMPLE
 2024-01-15T09:30:00.000Z`,
         placeholder: 'Describe the date...',
-        generationType: 'json-object',
+        generationType: 'timestamp',
       },
     },
     {
