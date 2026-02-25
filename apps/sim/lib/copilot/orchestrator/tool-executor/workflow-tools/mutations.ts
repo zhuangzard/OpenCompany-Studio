@@ -8,6 +8,7 @@ import {
   getExecutionState,
   getLatestExecutionState,
 } from '@/lib/workflows/executor/execution-state'
+import { hasExecutionResult } from '@/executor/utils/errors'
 import {
   createFolderRecord,
   createWorkflowRecord,
@@ -18,6 +19,56 @@ import {
   updateWorkflowRecord,
 } from '@/lib/workflows/utils'
 import { ensureWorkflowAccess, ensureWorkspaceAccess, getDefaultWorkspaceId } from '../access'
+
+const MAX_STRING_LEN = 2000
+
+function sanitizeForLLM(value: unknown): unknown {
+  if (value === null || value === undefined) return value
+  if (typeof value === 'string') {
+    if (value.length > MAX_STRING_LEN) return value.slice(0, MAX_STRING_LEN) + '... (truncated)'
+    return value
+  }
+  if (Array.isArray(value)) return value.map(sanitizeForLLM)
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (k === 'base64' || k === 'data') continue
+      out[k] = sanitizeForLLM(v)
+    }
+    return out
+  }
+  return value
+}
+
+function buildExecutionOutput(result: {
+  success: boolean
+  metadata?: { executionId?: string }
+  output?: unknown
+  logs?: unknown[]
+  error?: string
+}, extra?: Record<string, unknown>): ToolCallResult {
+  return {
+    success: result.success,
+    output: {
+      executionId: result.metadata?.executionId,
+      success: result.success,
+      ...extra,
+      output: sanitizeForLLM(result.output),
+      logs: sanitizeForLLM(result.logs),
+    },
+    error: result.success ? undefined : result.error || 'Workflow execution failed',
+  }
+}
+
+function buildExecutionError(error: unknown): ToolCallResult {
+  const message = error instanceof Error ? error.message : String(error)
+  if (hasExecutionResult(error)) {
+    return buildExecutionOutput(
+      { ...error.executionResult, success: false, error: error.executionResult.error || message }
+    )
+  }
+  return { success: false, error: message }
+}
 import type {
   CreateFolderParams,
   CreateWorkflowParams,
@@ -141,18 +192,9 @@ export async function executeRunWorkflow(
       { enabled: true, useDraftState, workflowTriggerType: 'copilot' }
     )
 
-    return {
-      success: result.success,
-      output: {
-        executionId: result.metadata?.executionId,
-        success: result.success,
-        output: result.output,
-        logs: result.logs,
-      },
-      error: result.success ? undefined : result.error || 'Workflow execution failed',
-    }
+    return buildExecutionOutput(result)
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return buildExecutionError(error)
   }
 }
 
@@ -367,19 +409,9 @@ export async function executeRunWorkflowUntilBlock(
       }
     )
 
-    return {
-      success: result.success,
-      output: {
-        executionId: result.metadata?.executionId,
-        success: result.success,
-        stoppedAfterBlockId: params.stopAfterBlockId,
-        output: result.output,
-        logs: result.logs,
-      },
-      error: result.success ? undefined : result.error || 'Workflow execution failed',
-    }
+    return buildExecutionOutput(result, { stoppedAfterBlockId: params.stopAfterBlockId })
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return buildExecutionError(error)
   }
 }
 
@@ -468,19 +500,9 @@ export async function executeRunFromBlock(
       }
     )
 
-    return {
-      success: result.success,
-      output: {
-        executionId: result.metadata?.executionId,
-        success: result.success,
-        startBlockId: params.startBlockId,
-        output: result.output,
-        logs: result.logs,
-      },
-      error: result.success ? undefined : result.error || 'Workflow execution failed',
-    }
+    return buildExecutionOutput(result, { startBlockId: params.startBlockId })
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return buildExecutionError(error)
   }
 }
 
@@ -642,18 +664,8 @@ export async function executeRunBlock(
       }
     )
 
-    return {
-      success: result.success,
-      output: {
-        executionId: result.metadata?.executionId,
-        success: result.success,
-        blockId: params.blockId,
-        output: result.output,
-        logs: result.logs,
-      },
-      error: result.success ? undefined : result.error || 'Workflow execution failed',
-    }
+    return buildExecutionOutput(result, { blockId: params.blockId })
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return buildExecutionError(error)
   }
 }

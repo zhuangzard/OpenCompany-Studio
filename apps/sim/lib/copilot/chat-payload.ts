@@ -1,6 +1,7 @@
 import { createLogger } from '@sim/logger'
 import { processFileAttachments } from '@/lib/copilot/chat-context'
 import { SIM_AGENT_VERSION } from '@/lib/copilot/constants'
+import { isHosted } from '@/lib/core/config/feature-flags'
 import { getCredentialsServerTool } from '@/lib/copilot/tools/server/user/get-credentials'
 import { tools } from '@/tools/registry'
 import { getLatestVersionTools, stripVersionSuffix } from '@/tools/utils'
@@ -173,5 +174,6 @@ export async function buildCopilotRequestPayload(
     ...(integrationTools.length > 0 ? { integrationTools } : {}),
     ...(credentials ? { credentials } : {}),
     ...(commands && commands.length > 0 ? { commands } : {}),
+    isHosted,
   }
 }
