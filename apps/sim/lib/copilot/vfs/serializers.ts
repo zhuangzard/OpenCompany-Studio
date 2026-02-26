@@ -127,6 +127,29 @@ export function serializeDocuments(
 }
 
 /**
+ * Serialize workspace file metadata for VFS files/{name}/meta.json
+ */
+export function serializeFileMeta(file: {
+  id: string
+  name: string
+  contentType: string
+  size: number
+  uploadedAt: Date
+}): string {
+  return JSON.stringify(
+    {
+      id: file.id,
+      name: file.name,
+      contentType: file.contentType,
+      size: file.size,
+      uploadedAt: file.uploadedAt.toISOString(),
+    },
+    null,
+    2
+  )
+}
+
+/**
  * Serialize table metadata for VFS tables/{name}/meta.json
  */
 export function serializeTableMeta(table: {

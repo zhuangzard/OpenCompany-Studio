@@ -6,6 +6,7 @@ import { searchDocumentationServerTool } from '@/lib/copilot/tools/server/docs/s
 import { knowledgeBaseServerTool } from '@/lib/copilot/tools/server/knowledge/knowledge-base'
 import { makeApiRequestServerTool } from '@/lib/copilot/tools/server/other/make-api-request'
 import { searchOnlineServerTool } from '@/lib/copilot/tools/server/other/search-online'
+import { workspaceFileServerTool } from '@/lib/copilot/tools/server/files/workspace-file'
 import { userTableServerTool } from '@/lib/copilot/tools/server/table/user-table'
 import { getCredentialsServerTool } from '@/lib/copilot/tools/server/user/get-credentials'
 import { setEnvironmentVariablesServerTool } from '@/lib/copilot/tools/server/user/set-environment-variables'
@@ -31,6 +32,7 @@ const serverToolRegistry: Record<string, BaseServerTool> = {
   [makeApiRequestServerTool.name]: makeApiRequestServerTool,
   [knowledgeBaseServerTool.name]: knowledgeBaseServerTool,
   [userTableServerTool.name]: userTableServerTool,
+  [workspaceFileServerTool.name]: workspaceFileServerTool,
 }
 
 /**

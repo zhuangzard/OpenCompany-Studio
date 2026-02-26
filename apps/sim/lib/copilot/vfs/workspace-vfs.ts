@@ -16,6 +16,7 @@ import {
   workflowMcpServer,
   workflowMcpTool,
   workspaceEnvironment,
+  workspaceFiles,
 } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
 import { and, count, desc, eq, isNull } from 'drizzle-orm'
@@ -30,6 +31,7 @@ import {
   serializeDeployments,
   serializeDocuments,
   serializeEnvironmentVariables,
+  serializeFileMeta,
   serializeIntegrationSchema,
   serializeKBMeta,
   serializeRecentExecutions,
@@ -189,6 +191,7 @@ function getStaticComponentFiles(): Map<string, string> {
  *   knowledgebases/{name}/meta.json
  *   knowledgebases/{name}/documents.json
  *   tables/{name}/meta.json
+ *   files/{name}/meta.json
  *   custom-tools/{name}.json
  *   environment/credentials.json
  *   environment/api-keys.json
@@ -211,6 +214,7 @@ export class WorkspaceVFS {
       this.materializeWorkflows(workspaceId, userId),
       this.materializeKnowledgeBases(workspaceId),
       this.materializeTables(workspaceId),
+      this.materializeFiles(workspaceId),
       this.materializeEnvironment(workspaceId, userId),
       this.materializeCustomTools(workspaceId),
     ])
@@ -445,6 +449,43 @@ export class WorkspaceVFS {
       }
     } catch (err) {
       logger.warn('Failed to materialize tables', {
+        workspaceId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  /**
+   * Materialize all workspace files (metadata only, no file content).
+   */
+  private async materializeFiles(workspaceId: string): Promise<void> {
+    try {
+      const fileRows = await db
+        .select({
+          id: workspaceFiles.id,
+          originalName: workspaceFiles.originalName,
+          contentType: workspaceFiles.contentType,
+          size: workspaceFiles.size,
+          uploadedAt: workspaceFiles.uploadedAt,
+        })
+        .from(workspaceFiles)
+        .where(eq(workspaceFiles.workspaceId, workspaceId))
+
+      for (const file of fileRows) {
+        const safeName = sanitizeName(file.originalName)
+        this.files.set(
+          `files/${safeName}/meta.json`,
+          serializeFileMeta({
+            id: file.id,
+            name: file.originalName,
+            contentType: file.contentType,
+            size: file.size,
+            uploadedAt: file.uploadedAt,
+          })
+        )
+      }
+    } catch (err) {
+      logger.warn('Failed to materialize files', {
         workspaceId,
         error: err instanceof Error ? err.message : String(err),
       })
@@ -689,9 +730,14 @@ export async function getOrMaterializeVFS(
 
 /**
  * Sanitize a name for use as a VFS path segment.
- * Uses the raw name as-is — only trims whitespace and replaces forward
- * slashes (which would break path hierarchy).
+ * Normalizes Unicode to NFC, collapses whitespace, strips control
+ * characters, and replaces forward slashes (path separators).
  */
 function sanitizeName(name: string): string {
-  return name.trim().replace(/\//g, '-')
+  return name
+    .normalize('NFC')
+    .trim()
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/\//g, '-')
+    .replace(/\s+/g, ' ')
 }

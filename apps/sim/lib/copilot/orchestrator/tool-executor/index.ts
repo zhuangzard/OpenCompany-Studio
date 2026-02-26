@@ -281,6 +281,7 @@ const SERVER_TOOLS = new Set<string>([
   'run_workflow_until_block',
   'run_block',
   'run_from_block',
+  'workspace_file',
 ])
 
 const SIM_WORKFLOW_TOOL_HANDLERS: Record<

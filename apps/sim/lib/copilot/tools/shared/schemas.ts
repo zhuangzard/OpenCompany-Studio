@@ -23,7 +23,6 @@ export type GetTriggerBlocksResultType = z.infer<typeof GetTriggerBlocksResult>
 export const KnowledgeBaseArgsSchema = z.object({
   operation: z.enum([
     'create',
-    'list',
     'get',
     'query',
     'update',
@@ -78,7 +77,6 @@ export type KnowledgeBaseResult = z.infer<typeof KnowledgeBaseResultSchema>
 export const UserTableArgsSchema = z.object({
   operation: z.enum([
     'create',
-    'list',
     'get',
     'get_schema',
     'delete',
@@ -115,6 +113,28 @@ export const UserTableResultSchema = z.object({
   data: z.any().optional(),
 })
 export type UserTableResult = z.infer<typeof UserTableResultSchema>
+
+// workspace_file - shared schema used by server tool and Go catalog
+export const WorkspaceFileArgsSchema = z.object({
+  operation: z.enum(['write', 'delete']),
+  args: z
+    .object({
+      fileId: z.string().optional(),
+      fileName: z.string().optional(),
+      content: z.string().optional(),
+      contentType: z.string().optional(),
+      workspaceId: z.string().optional(),
+    })
+    .optional(),
+})
+export type WorkspaceFileArgs = z.infer<typeof WorkspaceFileArgsSchema>
+
+export const WorkspaceFileResultSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.any().optional(),
+})
+export type WorkspaceFileResult = z.infer<typeof WorkspaceFileResultSchema>
 
 export const GetBlockOutputsInput = z.object({
   blockIds: z.array(z.string()).optional(),

@@ -6,7 +6,6 @@ import {
   createKnowledgeBase,
   deleteKnowledgeBase,
   getKnowledgeBaseById,
-  getKnowledgeBases,
   updateKnowledgeBase,
 } from '@/lib/knowledge/service'
 import {
@@ -89,31 +88,6 @@ export const knowledgeBaseServerTool: BaseServerTool<KnowledgeBaseArgs, Knowledg
               docCount: newKnowledgeBase.docCount,
               createdAt: newKnowledgeBase.createdAt,
             },
-          }
-        }
-
-        case 'list': {
-          const knowledgeBases = await getKnowledgeBases(context.userId, args.workspaceId)
-
-          logger.info('Knowledge bases listed via copilot', {
-            count: knowledgeBases.length,
-            userId: context.userId,
-            workspaceId: args.workspaceId,
-          })
-
-          return {
-            success: true,
-            message: `Found ${knowledgeBases.length} knowledge base(s)`,
-            data: knowledgeBases.map((kb) => ({
-              id: kb.id,
-              name: kb.name,
-              description: kb.description,
-              workspaceId: kb.workspaceId,
-              docCount: kb.docCount,
-              tokenCount: kb.tokenCount,
-              createdAt: kb.createdAt,
-              updatedAt: kb.updatedAt,
-            })),
           }
         }
 

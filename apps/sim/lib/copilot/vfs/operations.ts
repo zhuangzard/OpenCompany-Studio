@@ -201,7 +201,22 @@ export function read(
   offset?: number,
   limit?: number
 ): ReadResult | null {
-  const content = files.get(path)
+  let content = files.get(path)
+
+  // Fallback: normalize Unicode and retry for encoding mismatches
+  if (content === undefined) {
+    const normalized = path.normalize('NFC')
+    content = files.get(normalized)
+    if (content === undefined) {
+      for (const [key, value] of files) {
+        if (key.normalize('NFC') === normalized) {
+          content = value
+          break
+        }
+      }
+    }
+  }
+
   if (content === undefined) return null
 
   const lines = content.split('\n')

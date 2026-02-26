@@ -1,5 +1,9 @@
 import { createLogger } from '@sim/logger'
 import type { ExecutionContext, ToolCallResult } from '@/lib/copilot/orchestrator/types'
+import {
+  downloadWorkspaceFile,
+  listWorkspaceFiles,
+} from '@/lib/uploads/contexts/workspace/workspace-file-manager'
 import { getOrMaterializeVFS } from '@/lib/copilot/vfs'
 
 const logger = createLogger('VfsTools')
@@ -97,6 +101,14 @@ export async function executeVfsRead(
       params.limit as number | undefined
     )
     if (!result) {
+      // Dynamic content fetch for workspace files: read("files/lit-rock.json")
+      // resolves to the actual file content from storage.
+      const fileContent = await tryReadWorkspaceFile(path, workspaceId)
+      if (fileContent) {
+        logger.debug('vfs_read resolved workspace file', { path, totalLines: fileContent.totalLines })
+        return { success: true, output: fileContent }
+      }
+
       const suggestions = vfs.suggestSimilar(path)
       logger.warn('vfs_read file not found', { path, suggestions })
       const hint =
@@ -113,6 +125,67 @@ export async function executeVfsRead(
       error: err instanceof Error ? err.message : String(err),
     })
     return { success: false, error: err instanceof Error ? err.message : 'vfs_read failed' }
+  }
+}
+
+const MAX_FILE_READ_BYTES = 512 * 1024 // 512 KB
+
+const TEXT_TYPES = new Set([
+  'text/plain', 'text/csv', 'text/markdown', 'text/html', 'text/xml',
+  'application/json', 'application/xml', 'application/javascript',
+])
+
+function isReadableType(contentType: string): boolean {
+  return TEXT_TYPES.has(contentType) || contentType.startsWith('text/')
+}
+
+/**
+ * Resolve a VFS path like "files/lit-rock.json" to actual workspace file content.
+ * Matches by original filename against the workspace_files table.
+ */
+async function tryReadWorkspaceFile(
+  path: string,
+  workspaceId: string
+): Promise<{ content: string; totalLines: number } | null> {
+  // Match "files/{name}" or "files/{name}/content" patterns
+  const match = path.match(/^files\/(.+?)(?:\/content)?$/)
+  if (!match) return null
+  const fileName = match[1]
+
+  // Skip if it's a meta.json path (handled by normal VFS)
+  if (fileName.endsWith('/meta.json') || path.endsWith('/meta.json')) return null
+
+  try {
+    const files = await listWorkspaceFiles(workspaceId)
+    const record = files.find(
+      (f) => f.name === fileName || f.name.normalize('NFC') === fileName.normalize('NFC')
+    )
+    if (!record) return null
+
+    if (!isReadableType(record.type)) {
+      return {
+        content: `[Binary file: ${record.name} (${record.type}, ${record.size} bytes). Cannot display as text.]`,
+        totalLines: 1,
+      }
+    }
+
+    if (record.size > MAX_FILE_READ_BYTES) {
+      return {
+        content: `[File too large to display inline: ${record.name} (${record.size} bytes, limit ${MAX_FILE_READ_BYTES}). Use workspace_file read with fileId "${record.id}" to read it.]`,
+        totalLines: 1,
+      }
+    }
+
+    const buffer = await downloadWorkspaceFile(record)
+    const content = buffer.toString('utf-8')
+    return { content, totalLines: content.split('\n').length }
+  } catch (err) {
+    logger.warn('Failed to read workspace file content', {
+      path,
+      fileName,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
   }
 }
 

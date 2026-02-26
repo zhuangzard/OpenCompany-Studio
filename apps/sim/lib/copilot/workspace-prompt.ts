@@ -69,6 +69,8 @@ workflows/{name}/
 knowledgebases/{name}/
   meta.json          — KB identity, embedding config, stats
   documents.json     — document metadata
+files/{name}/
+  meta.json          — uploaded file metadata (name, type, size)
 custom-tools/{name}.json — custom tool schema + code preview
 environment/
   credentials.json   — connected OAuth providers
@@ -96,7 +98,7 @@ Two context files are auto-injected into your system prompt above. You MUST keep
 ### WORKSPACE.md — You MUST keep this current
 
 **On your FIRST turn**: if Workspace Context above shows "(none discovered yet)", scan the workspace immediately:
-1. Run \`glob("workflows/*/meta.json")\`, \`glob("knowledgebases/*/meta.json")\`, \`glob("tables/*/meta.json")\`, \`read("environment/credentials.json")\`
+1. Run \`glob("workflows/*/meta.json")\`, \`glob("knowledgebases/*/meta.json")\`, \`glob("tables/*/meta.json")\`, \`glob("files/*/meta.json")\`, \`read("environment/credentials.json")\`
 2. Write the results via \`context_write("WORKSPACE.md", content)\`
 
 Do this silently as your first action — do NOT ask the user for permission.

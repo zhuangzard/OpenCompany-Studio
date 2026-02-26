@@ -10,7 +10,6 @@ import {
   getRowById,
   getTableById,
   insertRow,
-  listTables,
   queryRows,
   updateRow,
   updateRowsByFilter,
@@ -59,19 +58,6 @@ export const userTableServerTool: BaseServerTool<UserTableArgs, UserTableResult>
             success: true,
             message: `Created table "${table.name}" (${table.id})`,
             data: { table },
-          }
-        }
-
-        case 'list': {
-          if (!workspaceId) {
-            return { success: false, message: 'Workspace ID is required' }
-          }
-
-          const tables = await listTables(workspaceId)
-          return {
-            success: true,
-            message: `Found ${tables.length} table(s)`,
-            data: { tables, totalCount: tables.length },
           }
         }
 
