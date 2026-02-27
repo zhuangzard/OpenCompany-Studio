@@ -3,3 +3,4 @@ import { sendMessageTool } from './send_message'
 
 export const googleChatSendMessageTool = sendMessageTool
 export const googleChatListSpacesTool = listSpacesTool
+export * from './types'

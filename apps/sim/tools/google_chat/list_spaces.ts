@@ -57,7 +57,6 @@ export const listSpacesTool: ToolConfig<GoogleChatListSpacesParams, GoogleChatRe
     method: 'GET',
     headers: (params) => ({
       Authorization: `Bearer ${params.accessToken}`,
-      'Content-Type': 'application/json',
     }),
   },
 
@@ -78,7 +77,7 @@ export const listSpacesTool: ToolConfig<GoogleChatListSpacesParams, GoogleChatRe
   outputs: {
     spaces: {
       type: 'json',
-      description: 'Array of Google Chat space objects',
+      description: 'Array of Google Chat space objects (name, displayName, spaceType, singleUserBotDm, threaded, type)',
     },
     nextPageToken: {
       type: 'string',

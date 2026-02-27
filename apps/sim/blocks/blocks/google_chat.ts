@@ -70,6 +70,7 @@ export const GoogleChatBlock: BlockConfig<GoogleChatResponse> = {
       type: 'short-input',
       placeholder: 'Optional thread key for threaded replies',
       condition: { field: 'operation', value: 'send_message' },
+      mode: 'advanced',
     },
     {
       id: 'filter',
@@ -77,6 +78,7 @@ export const GoogleChatBlock: BlockConfig<GoogleChatResponse> = {
       type: 'short-input',
       placeholder: 'e.g., spaceType = "SPACE"',
       condition: { field: 'operation', value: 'list_spaces' },
+      mode: 'advanced',
     },
     {
       id: 'pageSize',
@@ -84,6 +86,7 @@ export const GoogleChatBlock: BlockConfig<GoogleChatResponse> = {
       type: 'short-input',
       placeholder: 'Maximum spaces to return (default 100)',
       condition: { field: 'operation', value: 'list_spaces' },
+      mode: 'advanced',
     },
   ],
   tools: {
@@ -137,7 +140,7 @@ export const GoogleChatBlock: BlockConfig<GoogleChatResponse> = {
     threadName: { type: 'string', description: 'Thread resource name' },
     text: { type: 'string', description: 'Message text that was sent' },
     createTime: { type: 'string', description: 'Message creation timestamp' },
-    spaces: { type: 'json', description: 'Array of Google Chat space objects' },
+    spaces: { type: 'json', description: 'Array of Google Chat space objects (name, displayName, spaceType, singleUserBotDm, threaded, type)' },
     nextPageToken: { type: 'string', description: 'Token for next page of results' },
   },
 }
