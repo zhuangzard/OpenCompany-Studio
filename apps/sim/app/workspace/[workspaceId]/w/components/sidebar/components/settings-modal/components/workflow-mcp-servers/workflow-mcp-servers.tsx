@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createLogger } from '@sim/logger'
 import { Check, Clipboard, Plus, Search, Server } from 'lucide-react'
 import { useParams } from 'next/navigation'
@@ -85,6 +85,15 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
 
   const addToWorkspaceMutation = useCreateMcpServer()
   const [addedToWorkspace, setAddedToWorkspace] = useState(false)
+  const addedToWorkspaceTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
+
+  useEffect(() => {
+    return () => {
+      if (addedToWorkspaceTimerRef.current) {
+        clearTimeout(addedToWorkspaceTimerRef.current)
+      }
+    }
+  }, [])
 
   const [copiedConfig, setCopiedConfig] = useState(false)
   const [activeConfigTab, setActiveConfigTab] = useState<McpClientType>('cursor')
@@ -493,7 +502,10 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
                               },
                             })
                             setAddedToWorkspace(true)
-                            setTimeout(() => setAddedToWorkspace(false), 3000)
+                            addedToWorkspaceTimerRef.current = setTimeout(
+                              () => setAddedToWorkspace(false),
+                              3000
+                            )
                           } catch (err) {
                             logger.error('Failed to add server to workspace:', err)
                           }

@@ -719,23 +719,38 @@ export function MCP({ initialServerId }: MCPProps) {
   )
 
   /**
-   * Adds an MCP server from parsed JSON config.
+   * Validates parsed JSON config for name and domain requirements.
+   * Returns the config if valid, null otherwise (sets jsonError on failure).
    */
-  const handleAddServerFromJson = useCallback(async () => {
+  const validateJsonConfig = useCallback((): {
+    name: string
+    url: string
+    headers: Record<string, string>
+  } | null => {
     const config = parseJsonConfig(jsonInput)
-    if (!config) return
+    if (!config) return null
 
     if (!config.name) {
       setJsonError(
         'Server name is required. Use the mcpServers format: { "mcpServers": { "name": { ... } } }'
       )
-      return
+      return null
     }
 
     if (!isDomainAllowed(config.url, allowedMcpDomains)) {
       setJsonError('Domain not permitted by server policy')
-      return
+      return null
     }
+
+    return config
+  }, [jsonInput, parseJsonConfig, allowedMcpDomains])
+
+  /**
+   * Adds an MCP server from parsed JSON config.
+   */
+  const handleAddServerFromJson = useCallback(async () => {
+    const config = validateJsonConfig()
+    if (!config) return
 
     setIsAddingServer(true)
     try {
@@ -768,24 +783,13 @@ export function MCP({ initialServerId }: MCPProps) {
       })
 
       logger.info(`Added MCP server from JSON: ${config.name}`)
-      setJsonInput('')
-      setJsonError(null)
-      setAddFormMode('form')
       resetForm()
     } catch (error) {
       logger.error('Failed to add MCP server from JSON:', error)
     } finally {
       setIsAddingServer(false)
     }
-  }, [
-    jsonInput,
-    parseJsonConfig,
-    testConnection,
-    createServerMutation,
-    workspaceId,
-    resetForm,
-    allowedMcpDomains,
-  ])
+  }, [validateJsonConfig, testConnection, createServerMutation, workspaceId, resetForm])
 
   /**
    * Opens the delete confirmation dialog for an MCP server.
@@ -1639,18 +1643,8 @@ export function MCP({ initialServerId }: MCPProps) {
                     <Button
                       variant='default'
                       onClick={() => {
-                        const config = parseJsonConfig(jsonInput)
+                        const config = validateJsonConfig()
                         if (!config) return
-                        if (!config.name) {
-                          setJsonError(
-                            'Server name is required. Use the mcpServers format: { "mcpServers": { "name": { ... } } }'
-                          )
-                          return
-                        }
-                        if (!isDomainAllowed(config.url, allowedMcpDomains)) {
-                          setJsonError('Domain not permitted by server policy')
-                          return
-                        }
                         testConnection({
                           name: config.name,
                           transport: 'streamable-http',
