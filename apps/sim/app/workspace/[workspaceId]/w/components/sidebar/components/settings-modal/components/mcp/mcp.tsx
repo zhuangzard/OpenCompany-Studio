@@ -658,6 +658,18 @@ export function MCP({ initialServerId }: MCPProps) {
   }, [formData, testConnection, createServerMutation, workspaceId, headersToRecord, resetForm])
 
   /**
+   * Extracts string-only headers from an unknown value.
+   */
+  const extractStringHeaders = useCallback((headers: unknown): Record<string, string> => {
+    if (typeof headers !== 'object' || headers === null) return {}
+    return Object.fromEntries(
+      Object.entries(headers).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    )
+  }, [])
+
+  /**
    * Parses MCP JSON config into form data.
    * Accepts both `{ mcpServers: { name: { url, headers } } }` and `{ url, headers }` formats.
    */
@@ -681,14 +693,7 @@ export function MCP({ initialServerId }: MCPProps) {
           return {
             name,
             url: config.url,
-            headers:
-              typeof config.headers === 'object' && config.headers !== null
-                ? Object.fromEntries(
-                    Object.entries(config.headers).filter(
-                      (entry): entry is [string, string] => typeof entry[1] === 'string'
-                    )
-                  )
-                : {},
+            headers: extractStringHeaders(config.headers),
           }
         }
 
@@ -697,14 +702,7 @@ export function MCP({ initialServerId }: MCPProps) {
           return {
             name: '',
             url: parsed.url,
-            headers:
-              typeof parsed.headers === 'object' && parsed.headers !== null
-                ? Object.fromEntries(
-                    Object.entries(parsed.headers).filter(
-                      (entry): entry is [string, string] => typeof entry[1] === 'string'
-                    )
-                  )
-                : {},
+            headers: extractStringHeaders(parsed.headers),
           }
         }
 
@@ -715,7 +713,7 @@ export function MCP({ initialServerId }: MCPProps) {
         return null
       }
     },
-    []
+    [extractStringHeaders]
   )
 
   /**
