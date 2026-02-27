@@ -205,7 +205,10 @@ export async function executeToolAndReport(
     markToolResultSeen(toolCall.id)
 
     // Fire-and-forget (same reasoning as above).
-    markToolComplete(toolCall.id, toolCall.name, 500, toolCall.error).catch((err) => {
+    // Pass error as structured data so the Go side can surface it to the LLM.
+    markToolComplete(toolCall.id, toolCall.name, 500, toolCall.error, {
+      error: toolCall.error,
+    }).catch((err) => {
       logger.error('markToolComplete fire-and-forget failed', {
         toolCallId: toolCall.id,
         toolName: toolCall.name,
