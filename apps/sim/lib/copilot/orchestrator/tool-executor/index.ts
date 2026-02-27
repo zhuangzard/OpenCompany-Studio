@@ -16,6 +16,8 @@ import {
   upsertCustomTools,
 } from '@/lib/workflows/custom-tools/operations'
 import { getWorkflowById } from '@/lib/workflows/utils'
+import { isMcpTool } from '@/executor/constants'
+import { executeTool } from '@/tools'
 import { getTool, resolveToolId } from '@/tools/utils'
 import {
   executeCheckDeploymentStatus,
@@ -389,6 +391,7 @@ const SIM_WORKFLOW_TOOL_HANDLERS: Record<
 export function isToolAvailableOnSimSide(toolName: string): boolean {
   if (SERVER_TOOLS.has(toolName)) return true
   if (toolName in SIM_WORKFLOW_TOOL_HANDLERS) return true
+  if (isMcpTool(toolName)) return true
   const resolvedToolName = resolveToolId(toolName)
   return !!getTool(resolvedToolName)
 }
@@ -411,6 +414,10 @@ export async function executeToolServerSide(
     return executeSimWorkflowTool(toolName, toolCall.params || {}, context)
   }
 
+  if (isMcpTool(toolName)) {
+    return executeMcpToolDirect(toolCall, context)
+  }
+
   const toolConfig = getTool(resolvedToolName)
   if (!toolConfig) {
     logger.warn('Tool not found in registry', { toolName, resolvedToolName })
@@ -421,6 +428,36 @@ export async function executeToolServerSide(
   }
 
   return executeIntegrationToolDirect(toolCall, toolConfig, context)
+}
+
+/**
+ * Execute an MCP tool via the existing executeTool dispatcher which
+ * already handles the mcp- prefix and routes to /api/mcp/tools/execute.
+ */
+async function executeMcpToolDirect(
+  toolCall: ToolCallState,
+  context: ExecutionContext
+): Promise<ToolCallResult> {
+  const { userId, workflowId } = context
+
+  let workspaceId = context.workspaceId
+  if (!workspaceId && workflowId) {
+    const wf = await getWorkflowById(workflowId)
+    workspaceId = wf?.workspaceId ?? undefined
+  }
+
+  const params: Record<string, unknown> = {
+    ...(toolCall.params || {}),
+    _context: { workflowId, userId, workspaceId },
+  }
+
+  const result = await executeTool(toolCall.name, params)
+
+  return {
+    success: result.success,
+    output: result.output,
+    error: result.error,
+  }
 }
 
 /**

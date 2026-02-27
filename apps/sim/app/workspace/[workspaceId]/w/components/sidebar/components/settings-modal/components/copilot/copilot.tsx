@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+// import { useParams } from 'next/navigation'
 import { createLogger } from '@sim/logger'
 import { Check, Copy, Plus, Search } from 'lucide-react'
 import {
@@ -11,6 +12,7 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  // Switch,
 } from '@/components/emcn'
 import { Input, Skeleton } from '@/components/ui'
 import { formatDate } from '@/lib/core/utils/formatting'
@@ -20,6 +22,7 @@ import {
   useDeleteCopilotKey,
   useGenerateCopilotKey,
 } from '@/hooks/queries/copilot-keys'
+// import { useMcpServers, useUpdateMcpServer } from '@/hooks/queries/mcp'
 
 const logger = createLogger('CopilotSettings')
 
@@ -45,10 +48,28 @@ function CopilotKeySkeleton() {
  * Copilot Keys management component for handling API keys used with the Copilot feature.
  * Provides functionality to create, view, and delete copilot API keys.
  */
+// function McpServerSkeleton() {
+//   return (
+//     <div className='flex items-center justify-between gap-[12px]'>
+//       <div className='flex min-w-0 flex-col justify-center gap-[1px]'>
+//         <Skeleton className='h-5 w-[120px]' />
+//         <Skeleton className='h-5 w-[80px]' />
+//       </div>
+//       <Skeleton className='h-5 w-[36px] rounded-full' />
+//     </div>
+//   )
+// }
+
 export function Copilot() {
+  // const params = useParams()
+  // const workspaceId = params.workspaceId as string
+
   const { data: keys = [], isLoading } = useCopilotKeys()
   const generateKey = useGenerateCopilotKey()
   const deleteKeyMutation = useDeleteCopilotKey()
+
+  // const { data: mcpServers = [], isLoading: mcpLoading } = useMcpServers(workspaceId)
+  // const updateServer = useUpdateMcpServer()
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
@@ -59,6 +80,20 @@ export function Copilot() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
+
+  // const enabledServers = mcpServers.filter((s) => s.enabled)
+
+  // const handleToggleCopilot = async (serverId: string, enabled: boolean) => {
+  //   try {
+  //     await updateServer.mutateAsync({
+  //       workspaceId,
+  //       serverId,
+  //       updates: { copilotEnabled: enabled },
+  //     })
+  //   } catch (error) {
+  //     logger.error('Failed to toggle MCP server for Mothership', { error })
+  //   }
+  // }
 
   const filteredKeys = useMemo(() => {
     if (!searchTerm.trim()) return keys
@@ -128,6 +163,41 @@ export function Copilot() {
   return (
     <>
       <div className='flex h-full flex-col gap-[16px]'>
+        {/* MCP Tools Section — uncomment when ready to allow users to toggle MCP servers for Mothership
+        <div className='flex flex-col gap-[8px]'>
+          <div className='font-medium text-[13px] text-[var(--text-secondary)]'>
+            MCP Tools
+          </div>
+          {mcpLoading ? (
+            <div className='flex flex-col gap-[8px]'>
+              <McpServerSkeleton />
+              <McpServerSkeleton />
+            </div>
+          ) : enabledServers.length === 0 ? (
+            <div className='text-[13px] text-[var(--text-muted)]'>
+              No MCP servers configured. Add servers in the MCP Tools tab.
+            </div>
+          ) : (
+            <div className='flex flex-col gap-[8px]'>
+              {enabledServers.map((server) => (
+                <div key={server.id} className='flex items-center justify-between gap-[12px]'>
+                  <div className='flex min-w-0 flex-col justify-center gap-[1px]'>
+                    <span className='truncate font-medium text-[14px]'>{server.name}</span>
+                    <p className='truncate text-[13px] text-[var(--text-muted)]'>
+                      {server.toolCount ?? 0} tool{server.toolCount === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={server.copilotEnabled ?? false}
+                    onCheckedChange={(checked) => handleToggleCopilot(server.id, checked)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        */}
+
         {/* Search Input and Create Button */}
         <div className='flex items-center gap-[8px]'>
           <div className='flex flex-1 items-center gap-[8px] rounded-[8px] border border-[var(--border)] bg-transparent px-[8px] py-[5px] transition-colors duration-100 dark:bg-[var(--surface-4)] dark:hover:border-[var(--border-1)] dark:hover:bg-[var(--surface-5)]'>

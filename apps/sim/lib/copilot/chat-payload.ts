@@ -1,6 +1,8 @@
 import { createLogger } from '@sim/logger'
 import { processFileAttachments } from '@/lib/copilot/chat-context'
 import { isHosted } from '@/lib/core/config/feature-flags'
+import { createMcpToolId } from '@/lib/mcp/utils'
+import { getWorkflowById } from '@/lib/workflows/utils'
 import { tools } from '@/tools/registry'
 import { getLatestVersionTools, stripVersionSuffix } from '@/tools/utils'
 
@@ -100,6 +102,32 @@ export async function buildCopilotRequestPayload(
       logger.warn('Failed to build tool schemas for payload', {
         error: error instanceof Error ? error.message : String(error),
       })
+    }
+
+    // Discover MCP tools from workspace servers and include as deferred tools
+    if (workflowId) {
+      try {
+        const wf = await getWorkflowById(workflowId)
+        if (wf?.workspaceId) {
+          const { mcpService } = await import('@/lib/mcp/service')
+          const mcpTools = await mcpService.discoverTools(userId, wf.workspaceId)
+          for (const mcpTool of mcpTools) {
+            integrationTools.push({
+              name: createMcpToolId(mcpTool.serverId, mcpTool.name),
+              description:
+                mcpTool.description || `MCP tool: ${mcpTool.name} (${mcpTool.serverName})`,
+              input_schema: mcpTool.inputSchema as unknown as Record<string, unknown>,
+            })
+          }
+          if (mcpTools.length > 0) {
+            logger.info('Added MCP tools to copilot payload', { count: mcpTools.length })
+          }
+        }
+      } catch (error) {
+        logger.warn('Failed to discover MCP tools for copilot', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
