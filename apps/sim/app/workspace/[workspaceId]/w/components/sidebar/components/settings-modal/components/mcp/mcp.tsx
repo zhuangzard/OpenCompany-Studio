@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createLogger } from '@sim/logger'
-import { ChevronDown, Plus, Search, X } from 'lucide-react'
+import { Braces, ChevronDown, List, Plus, Search, X } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import {
   Badge,
@@ -13,6 +13,7 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Textarea,
   Tooltip,
 } from '@/components/emcn'
 import { Input } from '@/components/ui'
@@ -438,6 +439,9 @@ export function MCP({ initialServerId }: MCPProps) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [formData, setFormData] = useState<McpServerFormData>(DEFAULT_FORM_DATA)
   const [isAddingServer, setIsAddingServer] = useState(false)
+  const [addFormMode, setAddFormMode] = useState<'form' | 'json'>('form')
+  const [jsonInput, setJsonInput] = useState('')
+  const [jsonError, setJsonError] = useState<string | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [deletingServers, setDeletingServers] = useState<Set<string>>(new Set())
@@ -501,6 +505,9 @@ export function MCP({ initialServerId }: MCPProps) {
   const resetForm = useCallback(() => {
     setFormData(DEFAULT_FORM_DATA)
     setShowAddForm(false)
+    setAddFormMode('form')
+    setJsonInput('')
+    setJsonError(null)
     resetEnvVarState()
     clearTestResult()
   }, [clearTestResult, resetEnvVarState])
@@ -649,6 +656,109 @@ export function MCP({ initialServerId }: MCPProps) {
       setIsAddingServer(false)
     }
   }, [formData, testConnection, createServerMutation, workspaceId, headersToRecord, resetForm])
+
+  /**
+   * Parses MCP JSON config into form data.
+   * Accepts both `{ mcpServers: { name: { url, headers } } }` and `{ url, headers }` formats.
+   */
+  const parseJsonConfig = useCallback(
+    (json: string): { name: string; url: string; headers: Record<string, string> } | null => {
+      try {
+        const parsed = JSON.parse(json)
+
+        if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+          const entries = Object.entries(parsed.mcpServers)
+          if (entries.length === 0) {
+            setJsonError('No servers found in mcpServers')
+            return null
+          }
+          const [name, config] = entries[0] as [string, Record<string, unknown>]
+          if (!config.url || typeof config.url !== 'string') {
+            setJsonError('Server config must include a "url" field')
+            return null
+          }
+          setJsonError(null)
+          return {
+            name,
+            url: config.url,
+            headers: (config.headers as Record<string, string>) || {},
+          }
+        }
+
+        if (parsed.url && typeof parsed.url === 'string') {
+          setJsonError(null)
+          return {
+            name: '',
+            url: parsed.url,
+            headers: (parsed.headers as Record<string, string>) || {},
+          }
+        }
+
+        setJsonError('JSON must contain "mcpServers" or a "url" field')
+        return null
+      } catch {
+        setJsonError('Invalid JSON')
+        return null
+      }
+    },
+    []
+  )
+
+  /**
+   * Adds an MCP server from parsed JSON config.
+   */
+  const handleAddServerFromJson = useCallback(async () => {
+    const config = parseJsonConfig(jsonInput)
+    if (!config) return
+
+    if (!config.name) {
+      setJsonError(
+        'Server name is required. Use the mcpServers format: { "mcpServers": { "name": { ... } } }'
+      )
+      return
+    }
+
+    setIsAddingServer(true)
+    try {
+      const serverConfig = {
+        name: config.name,
+        transport: 'streamable-http' as const,
+        url: config.url,
+        headers: config.headers,
+        timeout: 30000,
+        workspaceId,
+      }
+
+      const connectionResult = await testConnection(serverConfig)
+
+      if (!connectionResult.success) {
+        logger.error('Connection test failed, server not added:', connectionResult.error)
+        return
+      }
+
+      await createServerMutation.mutateAsync({
+        workspaceId,
+        config: {
+          name: config.name,
+          transport: 'streamable-http',
+          url: config.url,
+          timeout: 30000,
+          headers: config.headers,
+          enabled: true,
+        },
+      })
+
+      logger.info(`Added MCP server from JSON: ${config.name}`)
+      setJsonInput('')
+      setJsonError(null)
+      setAddFormMode('form')
+      resetForm()
+    } catch (error) {
+      logger.error('Failed to add MCP server from JSON:', error)
+    } finally {
+      setIsAddingServer(false)
+    }
+  }, [jsonInput, parseJsonConfig, testConnection, createServerMutation, workspaceId, resetForm])
 
   /**
    * Opens the delete confirmation dialog for an MCP server.
@@ -1458,102 +1568,190 @@ export function MCP({ initialServerId }: MCPProps) {
         {shouldShowForm && !serversLoading && (
           <div className='rounded-[8px] border p-[10px]'>
             <div className='flex flex-col gap-[8px]'>
-              <FormField label='Server Name'>
-                <EmcnInput
-                  placeholder='e.g., My MCP Server'
-                  value={formData.name}
-                  onChange={(e) => {
-                    if (testResult) clearTestResult()
-                    handleNameChange(e.target.value)
-                  }}
-                  className='h-9'
-                />
-              </FormField>
+              <div className='flex items-center justify-end'>
+                <Tooltip.Root>
+                  <Tooltip.Trigger asChild>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      onClick={() => {
+                        if (testResult) clearTestResult()
+                        setAddFormMode(addFormMode === 'form' ? 'json' : 'form')
+                        setJsonError(null)
+                      }}
+                      className='h-6 w-6 p-0'
+                    >
+                      {addFormMode === 'form' ? (
+                        <Braces className='h-3.5 w-3.5' />
+                      ) : (
+                        <List className='h-3.5 w-3.5' />
+                      )}
+                    </Button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content>
+                    {addFormMode === 'form' ? 'Switch to JSON' : 'Switch to form'}
+                  </Tooltip.Content>
+                </Tooltip.Root>
+              </div>
 
-              <FormField label='Server URL'>
-                <FormattedInput
-                  ref={urlInputRef}
-                  placeholder='https://mcp.server.dev/{{YOUR_API_KEY}}/sse'
-                  value={formData.url || ''}
-                  scrollLeft={urlScrollLeft}
-                  showEnvVars={showEnvVars && activeInputField === 'url'}
-                  envVarProps={{
-                    searchTerm: envSearchTerm,
-                    cursorPosition,
-                    workspaceId,
-                    onSelect: handleEnvVarSelect,
-                    onClose: resetEnvVarState,
-                  }}
-                  availableEnvVars={availableEnvVars}
-                  onChange={(e) => handleInputChange('url', e.target.value)}
-                  onScroll={(scrollLeft) => handleUrlScroll(scrollLeft)}
-                />
-                {isAddDomainBlocked && (
-                  <p className='mt-[4px] text-[12px] text-[var(--text-error)]'>
-                    Domain not permitted by server policy
-                  </p>
-                )}
-              </FormField>
+              {addFormMode === 'json' ? (
+                <>
+                  <Textarea
+                    placeholder={`{\n  "mcpServers": {\n    "server-name": {\n      "url": "https://...",\n      "headers": {\n        "X-API-Key": "..."\n      }\n    }\n  }\n}`}
+                    value={jsonInput}
+                    onChange={(e) => {
+                      setJsonInput(e.target.value)
+                      if (jsonError) setJsonError(null)
+                      if (testResult) clearTestResult()
+                    }}
+                    className='min-h-[160px] resize-none font-mono text-[13px]'
+                  />
+                  {jsonError && <p className='text-[12px] text-[var(--text-error)]'>{jsonError}</p>}
 
-              <div className='flex flex-col gap-[8px]'>
-                <div className='flex items-center justify-between'>
-                  <span className='font-medium text-[13px] text-[var(--text-secondary)]'>
-                    Headers
-                  </span>
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    onClick={handleAddHeader}
-                    className='h-6 w-6 p-0'
-                  >
-                    <Plus className='h-3 w-3' />
-                  </Button>
-                </div>
+                  <div className='flex items-center justify-between pt-[12px]'>
+                    <Button
+                      variant='default'
+                      onClick={() => {
+                        const config = parseJsonConfig(jsonInput)
+                        if (!config) return
+                        if (!config.name) {
+                          setJsonError(
+                            'Server name is required. Use the mcpServers format: { "mcpServers": { "name": { ... } } }'
+                          )
+                          return
+                        }
+                        testConnection({
+                          name: config.name,
+                          transport: 'streamable-http',
+                          url: config.url,
+                          headers: config.headers,
+                          timeout: 30000,
+                          workspaceId,
+                        })
+                      }}
+                      disabled={isTestingConnection || !jsonInput.trim()}
+                    >
+                      {testButtonLabel}
+                    </Button>
 
-                <div className='flex max-h-[140px] flex-col gap-[8px] overflow-y-auto'>
-                  {(formData.headers || []).map((header, index) => (
-                    <HeaderRow
-                      key={index}
-                      header={header}
-                      index={index}
-                      headerScrollLeft={headerScrollLeft}
-                      showEnvVars={showEnvVars}
-                      activeInputField={activeInputField}
-                      activeHeaderIndex={activeHeaderIndex}
-                      envSearchTerm={envSearchTerm}
-                      cursorPosition={cursorPosition}
-                      workspaceId={workspaceId}
-                      availableEnvVars={availableEnvVars}
-                      onInputChange={handleInputChange}
-                      onHeaderScroll={handleHeaderScroll}
-                      onEnvVarSelect={handleEnvVarSelect}
-                      onEnvVarClose={resetEnvVarState}
-                      onRemove={() => handleRemoveHeader(index)}
+                    <div className='flex items-center gap-[8px]'>
+                      <Button variant='ghost' onClick={handleCancelForm}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddServerFromJson}
+                        disabled={isAddingServer || !jsonInput.trim()}
+                        variant='tertiary'
+                      >
+                        {isAddingServer ? 'Adding...' : 'Add Server'}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <FormField label='Server Name'>
+                    <EmcnInput
+                      placeholder='e.g., My MCP Server'
+                      value={formData.name}
+                      onChange={(e) => {
+                        if (testResult) clearTestResult()
+                        handleNameChange(e.target.value)
+                      }}
+                      className='h-9'
                     />
-                  ))}
-                </div>
-              </div>
+                  </FormField>
 
-              <div className='flex items-center justify-between pt-[12px]'>
-                <Button
-                  variant='default'
-                  onClick={handleTestConnection}
-                  disabled={isTestingConnection || !isFormValid || isAddDomainBlocked}
-                >
-                  {testButtonLabel}
-                </Button>
+                  <FormField label='Server URL'>
+                    <FormattedInput
+                      ref={urlInputRef}
+                      placeholder='https://mcp.server.dev/{{YOUR_API_KEY}}/sse'
+                      value={formData.url || ''}
+                      scrollLeft={urlScrollLeft}
+                      showEnvVars={showEnvVars && activeInputField === 'url'}
+                      envVarProps={{
+                        searchTerm: envSearchTerm,
+                        cursorPosition,
+                        workspaceId,
+                        onSelect: handleEnvVarSelect,
+                        onClose: resetEnvVarState,
+                      }}
+                      availableEnvVars={availableEnvVars}
+                      onChange={(e) => handleInputChange('url', e.target.value)}
+                      onScroll={(scrollLeft) => handleUrlScroll(scrollLeft)}
+                    />
+                    {isAddDomainBlocked && (
+                      <p className='mt-[4px] text-[12px] text-[var(--text-error)]'>
+                        Domain not permitted by server policy
+                      </p>
+                    )}
+                  </FormField>
 
-                <div className='flex items-center gap-[8px]'>
-                  <Button variant='ghost' onClick={handleCancelForm}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleAddServer} disabled={isSubmitDisabled} variant='tertiary'>
-                    {isSubmitDisabled && isFormValid && !isAddDomainBlocked
-                      ? 'Adding...'
-                      : 'Add Server'}
-                  </Button>
-                </div>
-              </div>
+                  <div className='flex flex-col gap-[8px]'>
+                    <div className='flex items-center justify-between'>
+                      <span className='font-medium text-[13px] text-[var(--text-secondary)]'>
+                        Headers
+                      </span>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        onClick={handleAddHeader}
+                        className='h-6 w-6 p-0'
+                      >
+                        <Plus className='h-3 w-3' />
+                      </Button>
+                    </div>
+
+                    <div className='flex max-h-[140px] flex-col gap-[8px] overflow-y-auto'>
+                      {(formData.headers || []).map((header, index) => (
+                        <HeaderRow
+                          key={index}
+                          header={header}
+                          index={index}
+                          headerScrollLeft={headerScrollLeft}
+                          showEnvVars={showEnvVars}
+                          activeInputField={activeInputField}
+                          activeHeaderIndex={activeHeaderIndex}
+                          envSearchTerm={envSearchTerm}
+                          cursorPosition={cursorPosition}
+                          workspaceId={workspaceId}
+                          availableEnvVars={availableEnvVars}
+                          onInputChange={handleInputChange}
+                          onHeaderScroll={handleHeaderScroll}
+                          onEnvVarSelect={handleEnvVarSelect}
+                          onEnvVarClose={resetEnvVarState}
+                          onRemove={() => handleRemoveHeader(index)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className='flex items-center justify-between pt-[12px]'>
+                    <Button
+                      variant='default'
+                      onClick={handleTestConnection}
+                      disabled={isTestingConnection || !isFormValid || isAddDomainBlocked}
+                    >
+                      {testButtonLabel}
+                    </Button>
+
+                    <div className='flex items-center gap-[8px]'>
+                      <Button variant='ghost' onClick={handleCancelForm}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddServer}
+                        disabled={isSubmitDisabled}
+                        variant='tertiary'
+                      >
+                        {isSubmitDisabled && isFormValid && !isAddDomainBlocked
+                          ? 'Adding...'
+                          : 'Add Server'}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

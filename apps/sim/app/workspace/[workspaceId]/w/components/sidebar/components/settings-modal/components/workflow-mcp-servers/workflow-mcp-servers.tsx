@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createLogger } from '@sim/logger'
-import { Check, Clipboard, Plus, Search } from 'lucide-react'
+import { Check, Clipboard, Plus, Search, Server } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import {
   Badge,
@@ -31,6 +31,7 @@ import { Input, Skeleton } from '@/components/ui'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useApiKeys } from '@/hooks/queries/api-keys'
+import { useCreateMcpServer } from '@/hooks/queries/mcp'
 import {
   useAddWorkflowMcpTool,
   useCreateWorkflowMcpServer,
@@ -56,7 +57,7 @@ interface ServerDetailViewProps {
   onBack: () => void
 }
 
-type McpClientType = 'cursor' | 'claude-code' | 'claude-desktop' | 'vscode'
+type McpClientType = 'sim' | 'cursor' | 'claude-code' | 'claude-desktop' | 'vscode'
 
 function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewProps) {
   const { data, isLoading, error } = useWorkflowMcpServer(workspaceId, serverId)
@@ -81,6 +82,9 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
     workspaceSettingsData?.settings?.workspace?.allowPersonalApiKeys ?? true
   const canManageWorkspaceKeys = userPermissions.canAdmin
   const defaultKeyType = allowPersonalApiKeys ? 'personal' : 'workspace'
+
+  const addToWorkspaceMutation = useCreateMcpServer()
+  const [addedToWorkspace, setAddedToWorkspace] = useState(false)
 
   const [copiedConfig, setCopiedConfig] = useState(false)
   const [activeConfigTab, setActiveConfigTab] = useState<McpClientType>('cursor')
@@ -177,6 +181,10 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
         .toLowerCase()
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '')
+
+      if (client === 'sim') {
+        return ''
+      }
 
       if (client === 'claude-code') {
         if (isPublic) {
@@ -450,6 +458,7 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
                     value={activeConfigTab}
                     onValueChange={(v) => setActiveConfigTab(v as McpClientType)}
                   >
+                    <ButtonGroupItem value='sim'>Sim</ButtonGroupItem>
                     <ButtonGroupItem value='cursor'>Cursor</ButtonGroupItem>
                     <ButtonGroupItem value='claude-code'>Claude Code</ButtonGroupItem>
                     <ButtonGroupItem value='claude-desktop'>Claude Desktop</ButtonGroupItem>
@@ -457,56 +466,124 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
                   </ButtonGroup>
                 </div>
 
-                <div>
-                  <div className='mb-[6.5px] flex items-center justify-between'>
-                    <span className='block pl-[2px] font-medium text-[13px] text-[var(--text-primary)]'>
-                      Configuration
-                    </span>
-                    <Button
-                      variant='ghost'
-                      onClick={() => handleCopyConfig(server.isPublic, server.name)}
-                      className='!p-1.5 -my-1.5'
-                    >
-                      {copiedConfig ? (
-                        <Check className='h-3 w-3' />
-                      ) : (
-                        <Clipboard className='h-3 w-3' />
-                      )}
-                    </Button>
-                  </div>
-                  <div className='relative'>
-                    <Code.Viewer
-                      code={getConfigSnippet(activeConfigTab, server.isPublic, server.name)}
-                      language={activeConfigTab === 'claude-code' ? 'javascript' : 'json'}
-                      wrapText
-                      className='!min-h-0 rounded-[4px] border border-[var(--border-1)]'
-                    />
-                    {activeConfigTab === 'cursor' && (
-                      <a
-                        href={getCursorInstallUrl(server.isPublic, server.name)}
-                        className='absolute top-[6px] right-2 inline-flex rounded-[6px] bg-[var(--surface-5)] ring-1 ring-[var(--border-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-2)]'
+                {activeConfigTab === 'sim' ? (
+                  <div className='rounded-[8px] border border-[var(--border-1)] p-[16px]'>
+                    <div className='flex flex-col gap-[12px]'>
+                      <p className='text-[13px] text-[var(--text-secondary)]'>
+                        Add this MCP server to your workspace so you can use its tools in other
+                        workflows via the MCP block.
+                      </p>
+                      <Button
+                        variant='tertiary'
+                        disabled={addToWorkspaceMutation.isPending || addedToWorkspace}
+                        onClick={async () => {
+                          try {
+                            const headers: Record<string, string> = server.isPublic
+                              ? {}
+                              : { 'X-API-Key': '' }
+                            await addToWorkspaceMutation.mutateAsync({
+                              workspaceId,
+                              config: {
+                                name: server.name,
+                                transport: 'streamable-http',
+                                url: mcpServerUrl,
+                                timeout: 30000,
+                                headers,
+                                enabled: true,
+                              },
+                            })
+                            setAddedToWorkspace(true)
+                            setTimeout(() => setAddedToWorkspace(false), 3000)
+                          } catch (err) {
+                            logger.error('Failed to add server to workspace:', err)
+                          }
+                        }}
                       >
-                        <img
-                          src='https://cursor.com/deeplink/mcp-install-dark.svg'
-                          alt='Add to Cursor'
-                          className='h-[26px] rounded-[6px] align-middle'
-                        />
-                      </a>
+                        {addToWorkspaceMutation.isPending ? (
+                          'Adding...'
+                        ) : addedToWorkspace ? (
+                          <>
+                            <Check className='mr-[6px] h-[13px] w-[13px]' />
+                            Added to Workspace
+                          </>
+                        ) : (
+                          <>
+                            <Server className='mr-[6px] h-[13px] w-[13px]' />
+                            Add to Workspace
+                          </>
+                        )}
+                      </Button>
+                      {!server.isPublic && (
+                        <p className='text-[11px] text-[var(--text-muted)]'>
+                          After adding, set your API key in Settings &gt; MCP Tools, or{' '}
+                          <button
+                            type='button'
+                            onClick={() => setShowCreateApiKeyModal(true)}
+                            className='underline hover:text-[var(--text-secondary)]'
+                          >
+                            create one now
+                          </button>
+                        </p>
+                      )}
+                      {addToWorkspaceMutation.isError && (
+                        <p className='text-[11px] text-[var(--text-error)]'>
+                          {addToWorkspaceMutation.error?.message || 'Failed to add server'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className='mb-[6.5px] flex items-center justify-between'>
+                      <span className='block pl-[2px] font-medium text-[13px] text-[var(--text-primary)]'>
+                        Configuration
+                      </span>
+                      <Button
+                        variant='ghost'
+                        onClick={() => handleCopyConfig(server.isPublic, server.name)}
+                        className='!p-1.5 -my-1.5'
+                      >
+                        {copiedConfig ? (
+                          <Check className='h-3 w-3' />
+                        ) : (
+                          <Clipboard className='h-3 w-3' />
+                        )}
+                      </Button>
+                    </div>
+                    <div className='relative'>
+                      <Code.Viewer
+                        code={getConfigSnippet(activeConfigTab, server.isPublic, server.name)}
+                        language={activeConfigTab === 'claude-code' ? 'javascript' : 'json'}
+                        wrapText
+                        className='!min-h-0 rounded-[4px] border border-[var(--border-1)]'
+                      />
+                      {activeConfigTab === 'cursor' && (
+                        <a
+                          href={getCursorInstallUrl(server.isPublic, server.name)}
+                          className='absolute top-[6px] right-2 inline-flex rounded-[6px] bg-[var(--surface-5)] ring-1 ring-[var(--border-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-2)]'
+                        >
+                          <img
+                            src='https://cursor.com/deeplink/mcp-install-dark.svg'
+                            alt='Add to Cursor'
+                            className='h-[26px] rounded-[6px] align-middle'
+                          />
+                        </a>
+                      )}
+                    </div>
+                    {!server.isPublic && (
+                      <p className='mt-[8px] text-[11px] text-[var(--text-muted)]'>
+                        Replace $SIM_API_KEY with your API key, or{' '}
+                        <button
+                          type='button'
+                          onClick={() => setShowCreateApiKeyModal(true)}
+                          className='underline hover:text-[var(--text-secondary)]'
+                        >
+                          create one now
+                        </button>
+                      </p>
                     )}
                   </div>
-                  {!server.isPublic && (
-                    <p className='mt-[8px] text-[11px] text-[var(--text-muted)]'>
-                      Replace $SIM_API_KEY with your API key, or{' '}
-                      <button
-                        type='button'
-                        onClick={() => setShowCreateApiKeyModal(true)}
-                        className='underline hover:text-[var(--text-secondary)]'
-                      >
-                        create one now
-                      </button>
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
             </SModalTabsContent>
           </SModalTabsBody>
