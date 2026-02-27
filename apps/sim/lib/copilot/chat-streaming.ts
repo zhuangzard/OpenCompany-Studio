@@ -102,23 +102,36 @@ export function createSSEStream(params: StreamingOrchestrationParams): ReadableS
       await setStreamMeta(streamId, { status: 'active', userId })
       eventWriter = createStreamEventWriter(streamId)
 
+      let localSeq = 0
+
       const pushEvent = async (event: Record<string, any>) => {
         if (!eventWriter) return
-        const entry = await eventWriter.write(event)
-        if (FLUSH_EVENT_TYPES.has(event.type)) {
-          await eventWriter.flush()
-        }
+
+        const eventId = ++localSeq
+
+        // Enqueue to client stream FIRST for minimal latency.
+        // Redis persistence happens after so the client never waits on I/O.
         try {
           if (!clientDisconnected) {
             controller.enqueue(
               encoder.encode(
-                `data: ${JSON.stringify({ ...event, eventId: entry.eventId, streamId })}\n\n`
+                `data: ${JSON.stringify({ ...event, eventId, streamId })}\n\n`
               )
             )
           }
         } catch {
           clientDisconnected = true
-          await eventWriter.flush()
+        }
+
+        try {
+          await eventWriter.write(event)
+          if (FLUSH_EVENT_TYPES.has(event.type)) {
+            await eventWriter.flush()
+          }
+        } catch {
+          if (clientDisconnected) {
+            await eventWriter.flush().catch(() => {})
+          }
         }
       }
 
@@ -187,6 +200,7 @@ export function createSSEStream(params: StreamingOrchestrationParams): ReadableS
 
 export const SSE_RESPONSE_HEADERS = {
   'Content-Type': 'text/event-stream',
+  'Content-Encoding': 'none',
   'Cache-Control': 'no-cache',
   Connection: 'keep-alive',
   'X-Accel-Buffering': 'no',

@@ -551,6 +551,9 @@ export const sseHandlers: Record<string, SSEHandler> = {
       })
     }
   },
+  tool_call_delta: () => {
+    // Argument streaming delta — forwarded from Go, no client action yet
+  },
   tool_generating: (data, context, get, set) => {
     const { toolCallId, toolName } = data
     if (!toolCallId || !toolName) return

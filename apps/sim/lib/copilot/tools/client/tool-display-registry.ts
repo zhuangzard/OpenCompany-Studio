@@ -5,8 +5,12 @@ import {
   Check,
   CheckCircle,
   CheckCircle2,
+  ClipboardList,
   Database,
+  Eye,
+  FileSearch,
   FileText,
+  FolderPlus,
   GitBranch,
   Globe,
   Globe2,
@@ -14,6 +18,7 @@ import {
   Grid2x2Check,
   Grid2x2X,
   KeyRound,
+  Link,
   Loader2,
   MessageSquare,
   MinusCircle,
@@ -28,6 +33,7 @@ import {
   Server,
   Settings2,
   Sparkles,
+  Table,
   Tag,
   TerminalSquare,
   Wrench,
@@ -2083,6 +2089,221 @@ const META_superagent: ToolMetadata = {
   },
 }
 
+const META_plan: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Planning', icon: Loader2 },
+    [ClientToolCallState.pending]: { text: 'Planning', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Planning', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Planned', icon: ClipboardList },
+    [ClientToolCallState.error]: { text: 'Failed to plan', icon: XCircle },
+    [ClientToolCallState.rejected]: { text: 'Skipped planning', icon: XCircle },
+    [ClientToolCallState.aborted]: { text: 'Aborted planning', icon: XCircle },
+  },
+  uiConfig: {
+    subagent: {
+      streamingLabel: 'Planning',
+      completedLabel: 'Planned',
+      shouldCollapse: true,
+      outputArtifacts: [],
+    },
+  },
+}
+
+const META_edit: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Editing', icon: Loader2 },
+    [ClientToolCallState.pending]: { text: 'Editing', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Editing', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Edited', icon: PencilLine },
+    [ClientToolCallState.error]: { text: 'Failed to edit', icon: XCircle },
+    [ClientToolCallState.rejected]: { text: 'Skipped editing', icon: XCircle },
+    [ClientToolCallState.aborted]: { text: 'Aborted editing', icon: XCircle },
+  },
+  uiConfig: {
+    subagent: {
+      streamingLabel: 'Editing',
+      completedLabel: 'Edited',
+      shouldCollapse: true,
+      outputArtifacts: [],
+    },
+  },
+}
+
+const META_debug: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Debugging', icon: Loader2 },
+    [ClientToolCallState.pending]: { text: 'Debugging', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Debugging', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Debugged', icon: Bug },
+    [ClientToolCallState.error]: { text: 'Failed to debug', icon: XCircle },
+    [ClientToolCallState.rejected]: { text: 'Skipped debugging', icon: XCircle },
+    [ClientToolCallState.aborted]: { text: 'Aborted debugging', icon: XCircle },
+  },
+  uiConfig: {
+    subagent: {
+      streamingLabel: 'Debugging',
+      completedLabel: 'Debugged',
+      shouldCollapse: true,
+      outputArtifacts: [],
+    },
+  },
+}
+
+const META_table: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Managing tables', icon: Loader2 },
+    [ClientToolCallState.pending]: { text: 'Managing tables', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Managing tables', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Tables updated', icon: Table },
+    [ClientToolCallState.error]: { text: 'Failed to manage tables', icon: XCircle },
+    [ClientToolCallState.rejected]: { text: 'Skipped table operation', icon: XCircle },
+    [ClientToolCallState.aborted]: { text: 'Aborted table operation', icon: XCircle },
+  },
+  uiConfig: {
+    subagent: {
+      streamingLabel: 'Managing tables',
+      completedLabel: 'Tables updated',
+      shouldCollapse: true,
+      outputArtifacts: [],
+    },
+  },
+}
+
+const META_get_deployed_workflow_state: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Checking deployed state', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Checking deployed state', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Retrieved deployed state', icon: Eye },
+    [ClientToolCallState.error]: { text: 'Failed to get deployed state', icon: XCircle },
+  },
+}
+
+const META_list_user_workspaces: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Listing workspaces', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Listing workspaces', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Listed workspaces', icon: Grid2x2 },
+    [ClientToolCallState.error]: { text: 'Failed to list workspaces', icon: XCircle },
+  },
+}
+
+const META_list_folders: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Listing folders', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Listing folders', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Listed folders', icon: FolderPlus },
+    [ClientToolCallState.error]: { text: 'Failed to list folders', icon: XCircle },
+  },
+}
+
+const META_create_workflow: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Creating workflow', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Creating workflow', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Created workflow', icon: Plus },
+    [ClientToolCallState.error]: { text: 'Failed to create workflow', icon: XCircle },
+  },
+}
+
+const META_create_folder: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Creating folder', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Creating folder', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Created folder', icon: FolderPlus },
+    [ClientToolCallState.error]: { text: 'Failed to create folder', icon: XCircle },
+  },
+}
+
+const META_rename_workflow: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Renaming workflow', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Renaming workflow', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Renamed workflow', icon: PencilLine },
+    [ClientToolCallState.error]: { text: 'Failed to rename workflow', icon: XCircle },
+  },
+}
+
+const META_move_workflow: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Moving workflow', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Moving workflow', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Moved workflow', icon: Navigation },
+    [ClientToolCallState.error]: { text: 'Failed to move workflow', icon: XCircle },
+  },
+}
+
+const META_move_folder: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Moving folder', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Moving folder', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Moved folder', icon: Navigation },
+    [ClientToolCallState.error]: { text: 'Failed to move folder', icon: XCircle },
+  },
+}
+
+const META_oauth_get_auth_link: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Getting auth link', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Getting auth link', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Got auth link', icon: Link },
+    [ClientToolCallState.error]: { text: 'Failed to get auth link', icon: XCircle },
+  },
+}
+
+const META_user_memory: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Accessing memory', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Accessing memory', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Accessed memory', icon: BookOpen },
+    [ClientToolCallState.error]: { text: 'Failed to access memory', icon: XCircle },
+  },
+}
+
+const META_user_table: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Querying table', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Querying table', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Table operation complete', icon: Database },
+    [ClientToolCallState.error]: { text: 'Table operation failed', icon: XCircle },
+  },
+}
+
+const META_tool_search_tool_regex: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Searching tools', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Searching tools', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Found tools', icon: Search },
+    [ClientToolCallState.error]: { text: 'Tool search failed', icon: XCircle },
+  },
+}
+
+const META_grep: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Searching', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Searching', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Search complete', icon: FileSearch },
+    [ClientToolCallState.error]: { text: 'Search failed', icon: XCircle },
+  },
+}
+
+const META_glob: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Finding files', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Finding files', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Files found', icon: FileSearch },
+    [ClientToolCallState.error]: { text: 'File search failed', icon: XCircle },
+  },
+}
+
+const META_read: ToolMetadata = {
+  displayNames: {
+    [ClientToolCallState.generating]: { text: 'Reading', icon: Loader2 },
+    [ClientToolCallState.executing]: { text: 'Reading', icon: Loader2 },
+    [ClientToolCallState.success]: { text: 'Read complete', icon: FileText },
+    [ClientToolCallState.error]: { text: 'Read failed', icon: XCircle },
+  },
+}
+
 const TOOL_METADATA_BY_ID: Record<string, ToolMetadata> = {
   auth: META_auth,
   check_deployment_status: META_check_deployment_status,
@@ -2090,15 +2311,20 @@ const TOOL_METADATA_BY_ID: Record<string, ToolMetadata> = {
   crawl_website: META_crawl_website,
   create_workspace_mcp_server: META_create_workspace_mcp_server,
   build: META_build,
+  create_folder: META_create_folder,
+  create_workflow: META_create_workflow,
   custom_tool: META_custom_tool,
+  debug: META_debug,
   deploy: META_deploy,
   deploy_api: META_deploy_api,
   deploy_chat: META_deploy_chat,
   deploy_mcp: META_deploy_mcp,
+  edit: META_edit,
   edit_workflow: META_edit_workflow,
   get_block_outputs: META_get_block_outputs,
   get_block_upstream_references: META_get_block_upstream_references,
   generate_api_key: META_generate_api_key,
+  get_deployed_workflow_state: META_get_deployed_workflow_state,
   get_examples_rag: META_get_examples_rag,
   get_operations_examples: META_get_operations_examples,
   get_page_contents: META_get_page_contents,
@@ -2106,16 +2332,26 @@ const TOOL_METADATA_BY_ID: Record<string, ToolMetadata> = {
   get_trigger_examples: META_get_trigger_examples,
   get_workflow_console: META_get_workflow_console,
   get_workflow_data: META_get_workflow_data,
+  glob: META_glob,
+  grep: META_grep,
   knowledge: META_knowledge,
   knowledge_base: META_knowledge_base,
+  list_folders: META_list_folders,
+  list_user_workspaces: META_list_user_workspaces,
   list_workspace_mcp_servers: META_list_workspace_mcp_servers,
   make_api_request: META_make_api_request,
   manage_custom_tool: META_manage_custom_tool,
   manage_mcp_tool: META_manage_mcp_tool,
   mark_todo_in_progress: META_mark_todo_in_progress,
+  move_folder: META_move_folder,
+  move_workflow: META_move_workflow,
   navigate_ui: META_navigate_ui,
+  oauth_get_auth_link: META_oauth_get_auth_link,
   oauth_request_access: META_oauth_request_access,
+  plan: META_plan,
+  read: META_read,
   redeploy: META_redeploy,
+  rename_workflow: META_rename_workflow,
   remember_debug: META_remember_debug,
   research: META_research,
   run_block: META_run_block,
@@ -2133,6 +2369,10 @@ const TOOL_METADATA_BY_ID: Record<string, ToolMetadata> = {
   sleep: META_sleep,
   summarize_conversation: META_summarize_conversation,
   superagent: META_superagent,
+  table: META_table,
+  tool_search_tool_regex: META_tool_search_tool_regex,
+  user_memory: META_user_memory,
+  user_table: META_user_table,
 }
 
 export const TOOL_DISPLAY_REGISTRY: Record<string, ToolDisplayEntry> = Object.fromEntries(

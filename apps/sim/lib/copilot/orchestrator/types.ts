@@ -4,6 +4,7 @@ export type SSEEventType =
   | 'content'
   | 'reasoning'
   | 'tool_call'
+  | 'tool_call_delta'
   | 'tool_generating'
   | 'tool_result'
   | 'tool_error'

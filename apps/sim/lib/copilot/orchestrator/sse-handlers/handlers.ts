@@ -172,6 +172,9 @@ export const sseHandlers: Record<string, SSEHandler> = {
     current.error = (data?.error as string | undefined) || 'Tool execution failed'
     current.endTime = Date.now()
   },
+  tool_call_delta: () => {
+    // Argument streaming delta — no action needed on orchestrator side
+  },
   tool_generating: (event, context) => {
     const data = getEventData(event)
     const toolCallId =

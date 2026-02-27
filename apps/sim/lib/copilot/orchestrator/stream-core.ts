@@ -140,7 +140,11 @@ export async function runStreamLoop(
       }
 
       if (normalizedEvent.type === 'subagent_end') {
-        context.subAgentParentStack.pop()
+        if (context.subAgentParentStack.length > 0) {
+          context.subAgentParentStack.pop()
+        } else {
+          logger.warn('subagent_end without matching subagent_start')
+        }
         context.subAgentParentToolCallId =
           context.subAgentParentStack.length > 0
             ? context.subAgentParentStack[context.subAgentParentStack.length - 1]

@@ -146,6 +146,10 @@ export const subAgentSSEHandlers: Record<string, SSEHandler> = {
     updateToolCallWithSubAgentData(context, get, set, parentToolCallId)
   },
 
+  tool_call_delta: () => {
+    // Argument streaming delta — no action needed in subagent context
+  },
+
   tool_generating: () => {
     // Tool generating event - no action needed, we'll handle the actual tool_call
   },
@@ -373,7 +377,11 @@ export async function applySseEvent(
         })
       }
     }
-    context.subAgentParentStack.pop()
+    if (context.subAgentParentStack.length > 0) {
+      context.subAgentParentStack.pop()
+    } else {
+      logger.warn('[SSE] subagent_end without matching subagent_start')
+    }
     context.subAgentParentToolCallId =
       context.subAgentParentStack.length > 0
         ? context.subAgentParentStack[context.subAgentParentStack.length - 1]
