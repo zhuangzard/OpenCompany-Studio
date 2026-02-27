@@ -480,7 +480,7 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
                           try {
                             const headers: Record<string, string> = server.isPublic
                               ? {}
-                              : { 'X-API-Key': '' }
+                              : { 'X-API-Key': '{{SIM_API_KEY}}' }
                             await addToWorkspaceMutation.mutateAsync({
                               workspaceId,
                               config: {
@@ -515,7 +515,7 @@ function ServerDetailView({ workspaceId, serverId, onBack }: ServerDetailViewPro
                       </Button>
                       {!server.isPublic && (
                         <p className='text-[11px] text-[var(--text-muted)]'>
-                          After adding, set your API key in Settings &gt; MCP Tools, or{' '}
+                          Set the SIM_API_KEY environment variable, or{' '}
                           <button
                             type='button'
                             onClick={() => setShowCreateApiKeyModal(true)}

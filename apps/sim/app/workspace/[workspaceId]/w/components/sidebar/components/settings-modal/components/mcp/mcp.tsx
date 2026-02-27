@@ -681,7 +681,14 @@ export function MCP({ initialServerId }: MCPProps) {
           return {
             name,
             url: config.url,
-            headers: (config.headers as Record<string, string>) || {},
+            headers:
+              typeof config.headers === 'object' && config.headers !== null
+                ? Object.fromEntries(
+                    Object.entries(config.headers).filter(
+                      (entry): entry is [string, string] => typeof entry[1] === 'string'
+                    )
+                  )
+                : {},
           }
         }
 
@@ -690,7 +697,14 @@ export function MCP({ initialServerId }: MCPProps) {
           return {
             name: '',
             url: parsed.url,
-            headers: (parsed.headers as Record<string, string>) || {},
+            headers:
+              typeof parsed.headers === 'object' && parsed.headers !== null
+                ? Object.fromEntries(
+                    Object.entries(parsed.headers).filter(
+                      (entry): entry is [string, string] => typeof entry[1] === 'string'
+                    )
+                  )
+                : {},
           }
         }
 
@@ -715,6 +729,11 @@ export function MCP({ initialServerId }: MCPProps) {
       setJsonError(
         'Server name is required. Use the mcpServers format: { "mcpServers": { "name": { ... } } }'
       )
+      return
+    }
+
+    if (!isDomainAllowed(config.url, allowedMcpDomains)) {
+      setJsonError('Domain not permitted by server policy')
       return
     }
 
@@ -758,7 +777,15 @@ export function MCP({ initialServerId }: MCPProps) {
     } finally {
       setIsAddingServer(false)
     }
-  }, [jsonInput, parseJsonConfig, testConnection, createServerMutation, workspaceId, resetForm])
+  }, [
+    jsonInput,
+    parseJsonConfig,
+    testConnection,
+    createServerMutation,
+    workspaceId,
+    resetForm,
+    allowedMcpDomains,
+  ])
 
   /**
    * Opens the delete confirmation dialog for an MCP server.
@@ -1618,6 +1645,10 @@ export function MCP({ initialServerId }: MCPProps) {
                           setJsonError(
                             'Server name is required. Use the mcpServers format: { "mcpServers": { "name": { ... } } }'
                           )
+                          return
+                        }
+                        if (!isDomainAllowed(config.url, allowedMcpDomains)) {
+                          setJsonError('Domain not permitted by server policy')
                           return
                         }
                         testConnection({
