@@ -245,11 +245,24 @@ export const sseHandlers: Record<string, SSEHandler> = {
       return
     }
 
+    // Fire tool execution without awaiting so parallel tool calls from the
+    // same LLM turn execute concurrently. executeToolAndReport is self-contained:
+    // it updates tool state, calls markToolComplete, and emits result events.
+    const fireToolExecution = () => {
+      executeToolAndReport(toolCallId, context, execContext, options).catch((err) => {
+        logger.error('Parallel tool execution failed', {
+          toolCallId,
+          toolName,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+
     // Non-interactive mode (Mothership/MCP): skip confirmation & client gates,
     // execute server-side directly.
     if (options.interactive === false) {
       if (options.autoExecuteTools !== false) {
-        await executeToolAndReport(toolCallId, context, execContext, options)
+        fireToolExecution()
       }
       return
     }
@@ -272,7 +285,7 @@ export const sseHandlers: Record<string, SSEHandler> = {
           handleClientCompletion(toolCall, toolCallId, completion)
           return
         }
-        await executeToolAndReport(toolCallId, context, execContext, options)
+        fireToolExecution()
         return
       }
 
@@ -342,7 +355,7 @@ export const sseHandlers: Record<string, SSEHandler> = {
     }
 
     if (options.autoExecuteTools !== false) {
-      await executeToolAndReport(toolCallId, context, execContext, options)
+      fireToolExecution()
     }
   },
   reasoning: (event, context) => {
@@ -462,11 +475,21 @@ export const subAgentHandlers: Record<string, SSEHandler> = {
       return
     }
 
+    const fireToolExecution = () => {
+      executeToolAndReport(toolCallId, context, execContext, options).catch((err) => {
+        logger.error('Parallel subagent tool execution failed', {
+          toolCallId,
+          toolName,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+
     // Non-interactive mode (Mothership/MCP): skip confirmation & client gates,
     // execute server-side directly.
     if (options.interactive === false) {
       if (options.autoExecuteTools !== false) {
-        await executeToolAndReport(toolCallId, context, execContext, options)
+        fireToolExecution()
       }
       return
     }
@@ -488,7 +511,7 @@ export const subAgentHandlers: Record<string, SSEHandler> = {
           handleClientCompletion(toolCall, toolCallId, completion)
           return
         }
-        await executeToolAndReport(toolCallId, context, execContext, options)
+        fireToolExecution()
         return
       }
       if (decision?.status === 'rejected' || decision?.status === 'error') {
@@ -555,7 +578,7 @@ export const subAgentHandlers: Record<string, SSEHandler> = {
     }
 
     if (options.autoExecuteTools !== false) {
-      await executeToolAndReport(toolCallId, context, execContext, options)
+      fireToolExecution()
     }
   },
   tool_result: (event, context) => {
