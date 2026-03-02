@@ -11,8 +11,6 @@ import { cn } from '@/lib/core/utils/cn'
 
 const REMARK_PLUGINS = [remarkGfm]
 
-// ── Types ──
-
 type ToolCallStatus = 'executing' | 'success' | 'error'
 
 interface ToolCallInfo {
@@ -51,7 +49,13 @@ const SUBAGENT_LABELS: Record<string, string> = {
   edit: 'Editing workflow',
 }
 
-// ── Rendered chat components ──
+const SEND_BUTTON_BASE = 'h-7 w-7 rounded-full border-0 p-0 transition-colors'
+const SEND_BUTTON_ACTIVE =
+  'bg-[var(--c-383838)] hover:bg-[var(--c-575757)] dark:bg-[var(--c-E0E0E0)] dark:hover:bg-[var(--c-CFCFCF)]'
+const SEND_BUTTON_DISABLED = 'bg-[var(--c-808080)] dark:bg-[var(--c-808080)]'
+
+const TEXTAREA_CLASSES =
+  'm-0 box-border h-auto max-h-[30vh] min-h-[24px] w-full resize-none overflow-y-auto overflow-x-hidden break-words border-0 bg-transparent px-1 py-1 font-medium font-sans text-sm text-[var(--text-primary)] leading-5 outline-none placeholder:text-[var(--text-muted)] focus-visible:ring-0 focus-visible:ring-offset-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 
 function ToolStatusIcon({ status }: { status: ToolCallStatus }) {
   switch (status) {
@@ -124,7 +128,11 @@ function AssistantBlocks({
   )
 }
 
-// ── Main component ──
+function autoResizeTextarea(e: React.FormEvent<HTMLTextAreaElement>) {
+  const target = e.target as HTMLTextAreaElement
+  target.style.height = 'auto'
+  target.style.height = `${Math.min(target.scrollHeight, window.innerHeight * 0.3)}px`
+}
 
 export function Home() {
   const { workspaceId } = useParams<{ workspaceId: string }>()
@@ -334,26 +342,19 @@ export function Home() {
     [handleSubmit]
   )
 
-  const clear = () => {
-    setMessages([])
-    chatIdRef.current = undefined
-  }
-
   const canSubmit = inputValue.trim().length > 0 && !isSending
 
   const inputBar = (
-    <div className='mx-auto w-full max-w-2xl rounded-2xl border border-[var(--border-1)] bg-white px-3 py-[10px] shadow-sm dark:bg-[var(--surface-4)]'>
-      <div className='relative mb-[6px]'>
-        <textarea
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder='What do you want to build?'
-          rows={1}
-          className='m-0 box-border h-auto max-h-[120px] min-h-[24px] w-full resize-none overflow-y-auto overflow-x-hidden break-words border-0 bg-transparent px-1 py-1 font-medium font-sans text-[var(--text-primary)] text-sm leading-[1.25rem] outline-none [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-[var(--text-muted)] focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden'
-        />
-      </div>
-
+    <div className='mx-auto w-full max-w-[640px] rounded-2xl border border-[var(--border-1)] bg-white px-2.5 py-2 shadow-sm dark:bg-[var(--surface-4)]'>
+      <textarea
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onInput={autoResizeTextarea}
+        placeholder='What do you want to build?'
+        rows={2}
+        className={TEXTAREA_CLASSES}
+      />
       <div className='flex items-center justify-end'>
         {isSending ? (
           <Button
@@ -361,14 +362,11 @@ export function Home() {
               abortControllerRef.current?.abort()
               setIsSending(false)
             }}
-            className={cn(
-              'h-[28px] w-[28px] rounded-full border-0 p-0 transition-colors',
-              'bg-[var(--c-383838)] hover:bg-[var(--c-575757)] dark:bg-[var(--c-E0E0E0)] dark:hover:bg-[var(--c-CFCFCF)]'
-            )}
+            className={cn(SEND_BUTTON_BASE, SEND_BUTTON_ACTIVE)}
             title='Stop generation'
           >
             <svg
-              className='block h-[14px] w-[14px] fill-white dark:fill-black'
+              className='block h-3.5 w-3.5 fill-white dark:fill-black'
               viewBox='0 0 24 24'
               xmlns='http://www.w3.org/2000/svg'
             >
@@ -379,12 +377,7 @@ export function Home() {
           <Button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={cn(
-              'h-[28px] w-[28px] rounded-full border-0 p-0 transition-colors',
-              canSubmit
-                ? 'bg-[var(--c-383838)] hover:bg-[var(--c-575757)] dark:bg-[var(--c-E0E0E0)] dark:hover:bg-[var(--c-CFCFCF)]'
-                : 'bg-[var(--c-808080)] dark:bg-[var(--c-808080)]'
-            )}
+            className={cn(SEND_BUTTON_BASE, canSubmit ? SEND_BUTTON_ACTIVE : SEND_BUTTON_DISABLED)}
           >
             <ArrowUp className='block h-4 w-4 text-white dark:text-black' strokeWidth={2.25} />
           </Button>

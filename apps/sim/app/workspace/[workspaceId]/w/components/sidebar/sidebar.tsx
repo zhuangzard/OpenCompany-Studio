@@ -588,28 +588,6 @@ export const Sidebar = memo(function Sidebar() {
             })}
           </div>
 
-          {/* Tasks */}
-          {tasks.length > 0 && (
-            <div className='mt-[12px] flex flex-shrink-0 flex-col'>
-              <div className='px-[16px]'>
-                <div className='font-medium text-[var(--text-tertiary)] text-small'>All tasks</div>
-              </div>
-              <div className='mt-[6px] px-[8px]'>
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className='mx-[2px] flex h-[28px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
-                  >
-                    <Blimp className='h-[14px] w-[14px] flex-shrink-0 text-[var(--text-secondary)]' />
-                    <div className='min-w-0 truncate font-medium text-[var(--text-secondary)]'>
-                      {task.name}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Workspace */}
           <div className='mt-[12px] flex flex-shrink-0 flex-col'>
             <div className='px-[16px] pb-[6px]'>
@@ -643,6 +621,28 @@ export const Sidebar = memo(function Sidebar() {
               })}
             </div>
           </div>
+
+          {/* Tasks */}
+          {tasks.length > 0 && (
+            <div className='mt-[12px] flex flex-shrink-0 flex-col'>
+              <div className='px-[16px]'>
+                <div className='font-medium text-[var(--text-tertiary)] text-small'>All tasks</div>
+              </div>
+              <div className='mt-[6px] px-[8px]'>
+                {tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className='mx-[2px] flex h-[28px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
+                  >
+                    <Blimp className='h-[14px] w-[14px] flex-shrink-0 text-[var(--text-secondary)]' />
+                    <div className='min-w-0 truncate font-medium text-[var(--text-secondary)]'>
+                      {task.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Workflows */}
           <div className='workflows-section relative mt-[12px] flex flex-1 flex-col overflow-hidden'>
