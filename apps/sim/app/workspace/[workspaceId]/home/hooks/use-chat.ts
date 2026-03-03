@@ -71,7 +71,8 @@ function getPayloadData(payload: SSEPayload): SSEPayloadData | undefined {
 export function useChat(
   workspaceId: string,
   initialChatId?: string,
-  initialStreamId?: string
+  initialStreamId?: string,
+  initialMessage?: string
 ): UseChatReturn {
   const queryClient = useQueryClient()
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -295,10 +296,9 @@ export function useChat(
 
     const userMessageId = initialStreamId
     const assistantId = crypto.randomUUID()
-    const userMessage = new URLSearchParams(window.location.search).get('m') || ''
 
     setMessages([
-      { id: userMessageId, role: 'user', content: userMessage },
+      { id: userMessageId, role: 'user', content: initialMessage || '' },
       { id: assistantId, role: 'assistant', content: '', contentBlocks: [] },
     ])
 
@@ -327,7 +327,7 @@ export function useChat(
     return () => {
       abortController.abort()
     }
-  }, [initialStreamId, workspaceId, processSSEStream, finalize])
+  }, [initialStreamId, initialMessage, workspaceId, processSSEStream, finalize])
 
   const sendMessage = useCallback(
     async (message: string) => {

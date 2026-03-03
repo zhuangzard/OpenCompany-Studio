@@ -10,16 +10,17 @@ import { useChat } from './hooks'
 interface HomeProps {
   chatId?: string
   streamId?: string
+  initialMessage?: string
 }
 
-export function Home({ chatId, streamId }: HomeProps = {}) {
+export function Home({ chatId, streamId, initialMessage }: HomeProps = {}) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const router = useRouter()
   const [inputValue, setInputValue] = useState('')
   const { messages, isSending, currentChatId, sendMessage, stopGeneration, chatBottomRef } =
-    useChat(workspaceId, chatId, streamId)
+    useChat(workspaceId, chatId, streamId, initialMessage)
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(() => {
     const trimmed = inputValue.trim()
     if (!trimmed) return
     setInputValue('')
@@ -31,26 +32,20 @@ export function Home({ chatId, streamId }: HomeProps = {}) {
 
     const userMessageId = crypto.randomUUID()
 
-    try {
-      const response = await fetch(MOTHERSHIP_CHAT_API_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: trimmed,
-          workspaceId,
-          userMessageId,
-          createNewChat: true,
-        }),
-      })
+    fetch(MOTHERSHIP_CHAT_API_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: trimmed,
+        workspaceId,
+        userMessageId,
+        createNewChat: true,
+      }),
+    }).catch(() => {})
 
-      if (!response.ok) throw new Error('Failed to start task')
-      response.body?.cancel()
-      router.push(
-        `/workspace/${workspaceId}/task/new?sid=${userMessageId}&m=${encodeURIComponent(trimmed)}`
-      )
-    } catch {
-      setInputValue(trimmed)
-    }
+    router.push(
+      `/workspace/${workspaceId}/task/new?sid=${userMessageId}&m=${encodeURIComponent(trimmed)}`
+    )
   }, [inputValue, chatId, currentChatId, sendMessage, workspaceId, router])
 
   const hasMessages = messages.length > 0

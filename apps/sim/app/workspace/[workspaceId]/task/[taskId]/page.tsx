@@ -1,6 +1,3 @@
-import { redirect } from 'next/navigation'
-import { getSession } from '@/lib/auth'
-import { verifyWorkspaceMembership } from '@/app/api/workflows/utils'
 import { Home } from '@/app/workspace/[workspaceId]/home/home'
 
 interface TaskPageProps {
@@ -15,21 +12,11 @@ interface TaskPageProps {
 }
 
 export default async function TaskPage({ params, searchParams }: TaskPageProps) {
-  const { workspaceId, taskId } = await params
-  const session = await getSession()
-
-  if (!session?.user?.id) {
-    redirect('/')
-  }
-
-  const hasPermission = await verifyWorkspaceMembership(session.user.id, workspaceId)
-  if (!hasPermission) {
-    redirect('/')
-  }
+  const { taskId } = await params
 
   if (taskId === 'new') {
-    const { sid } = await searchParams
-    return <Home streamId={sid} />
+    const { sid, m } = await searchParams
+    return <Home streamId={sid} initialMessage={m} />
   }
 
   return <Home chatId={taskId} />
