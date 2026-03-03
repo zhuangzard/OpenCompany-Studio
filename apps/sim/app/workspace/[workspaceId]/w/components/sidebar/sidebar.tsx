@@ -21,6 +21,7 @@ import {
 } from '@/components/emcn'
 import { Table } from '@/components/emcn/icons'
 import { useSession } from '@/lib/auth/auth-client'
+import { cn } from '@/lib/core/utils/cn'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { createCommands } from '@/app/workspace/[workspaceId]/utils/commands-utils'
@@ -45,6 +46,7 @@ import {
   useImportWorkflow,
   useImportWorkspace,
 } from '@/app/workspace/[workspaceId]/w/hooks'
+import { useTasks } from '@/hooks/queries/tasks'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { SIDEBAR_WIDTH } from '@/stores/constants'
 import { useFolderStore } from '@/stores/folders/store'
@@ -321,7 +323,43 @@ export const Sidebar = memo(function Sidebar() {
     []
   )
 
-  const tasks = [{ id: '1', name: 'Finding leads for design engineers in SF' }]
+  const { data: fetchedTasks = [] } = useTasks(workspaceId)
+
+  const tasks = useMemo(
+    () =>
+      fetchedTasks.length > 0
+        ? fetchedTasks.map((t) => ({
+            ...t,
+            href: `/workspace/${workspaceId}/task/${t.id}`,
+          }))
+        : [{ id: 'new', name: 'New task', href: `/workspace/${workspaceId}/home` }],
+    [fetchedTasks, workspaceId]
+  )
+
+  const [isScrolledFromTop, setIsScrolledFromTop] = useState(false)
+  const [hasOverflowBottom, setHasOverflowBottom] = useState(false)
+
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const updateScrollState = () => {
+      setIsScrolledFromTop(container.scrollTop > 0)
+      setHasOverflowBottom(
+        container.scrollHeight > container.scrollTop + container.clientHeight + 1
+      )
+    }
+
+    updateScrollState()
+    container.addEventListener('scroll', updateScrollState, { passive: true })
+    const observer = new ResizeObserver(updateScrollState)
+    observer.observe(container)
+
+    return () => {
+      container.removeEventListener('scroll', updateScrollState)
+      observer.disconnect()
+    }
+  }, [])
 
   const isLoading = workflowsLoading || sessionLoading
   const initialScrollDoneRef = useRef(false)
@@ -547,7 +585,7 @@ export const Sidebar = memo(function Sidebar() {
           </div>
 
           {/* Top Navigation: Home, Search */}
-          <div className='mt-[12px] flex flex-shrink-0 flex-col gap-[2px] px-[8px]'>
+          <div className='mt-[14px] flex flex-shrink-0 flex-col gap-[2px] px-[8px]'>
             {topNavItems.map((item) => {
               const Icon = item.icon
               const active = item.href ? pathname?.startsWith(item.href) : false
@@ -589,7 +627,12 @@ export const Sidebar = memo(function Sidebar() {
           </div>
 
           {/* Workspace */}
-          <div className='mt-[12px] flex flex-shrink-0 flex-col'>
+          <div
+            className={cn(
+              'mt-[14px] flex flex-shrink-0 flex-col border-b pb-[4px] transition-colors duration-150',
+              !isScrolledFromTop && 'border-transparent'
+            )}
+          >
             <div className='px-[16px] pb-[6px]'>
               <div className='font-medium text-[var(--text-tertiary)] text-small'>Workspace</div>
             </div>
@@ -622,112 +665,126 @@ export const Sidebar = memo(function Sidebar() {
             </div>
           </div>
 
-          {/* Tasks */}
-          {tasks.length > 0 && (
-            <div className='mt-[12px] flex flex-shrink-0 flex-col'>
+          {/* Scrollable Tasks + Workflows */}
+          <div
+            ref={scrollContainerRef}
+            className='mt-[9px] flex flex-1 flex-col overflow-y-auto overflow-x-hidden'
+          >
+            {/* Tasks */}
+            <div className='flex flex-shrink-0 flex-col'>
               <div className='px-[16px]'>
                 <div className='font-medium text-[var(--text-tertiary)] text-small'>All tasks</div>
               </div>
-              <div className='mt-[6px] px-[8px]'>
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className='mx-[2px] flex h-[28px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
-                  >
-                    <Blimp className='h-[14px] w-[14px] flex-shrink-0 text-[var(--text-secondary)]' />
-                    <div className='min-w-0 truncate font-medium text-[var(--text-secondary)]'>
-                      {task.name}
-                    </div>
-                  </div>
-                ))}
+              <div className='mt-[6px] flex flex-col gap-[2px] px-[8px]'>
+                {tasks.map((task) => {
+                  const active = task.id !== 'new' && pathname === task.href
+                  const textColor = active
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)]'
+
+                  return (
+                    <Link
+                      key={task.id}
+                      href={task.href}
+                      className={`mx-[2px] flex h-[28px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)] ${active ? 'bg-[var(--surface-6)] dark:bg-[var(--surface-5)]' : ''}`}
+                      onContextMenu={(e) => handleNavItemContextMenu(e, task.href)}
+                    >
+                      <Blimp className={`h-[14px] w-[14px] flex-shrink-0 ${textColor}`} />
+                      <div className={`min-w-0 truncate font-medium ${textColor}`}>{task.name}</div>
+                    </Link>
+                  )
+                })}
               </div>
             </div>
-          )}
 
-          {/* Workflows */}
-          <div className='workflows-section relative mt-[12px] flex flex-1 flex-col overflow-hidden'>
-            <div className='flex flex-shrink-0 flex-col space-y-[4px] px-[16px]'>
-              <div className='flex items-center justify-between'>
-                <div className='font-medium text-[var(--text-tertiary)] text-small'>Workflows</div>
-                <div className='flex items-center justify-center gap-[8px]'>
-                  <Popover>
+            {/* Workflows */}
+            <div className='workflows-section mt-[14px] flex flex-col'>
+              <div className='flex flex-shrink-0 flex-col space-y-[4px] px-[16px]'>
+                <div className='flex items-center justify-between'>
+                  <div className='font-medium text-[var(--text-tertiary)] text-small'>
+                    Workflows
+                  </div>
+                  <div className='flex items-center justify-center gap-[8px]'>
+                    <Popover>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger asChild>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant='ghost'
+                              className='h-[18px] w-[18px] rounded-[4px] p-0 hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
+                              disabled={!canEdit}
+                            >
+                              {isImporting || isCreatingFolder ? (
+                                <Loader className='h-[14px] w-[14px]' animate />
+                              ) : (
+                                <MoreHorizontal className='h-[14px] w-[14px]' />
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content>
+                          <p>More actions</p>
+                        </Tooltip.Content>
+                      </Tooltip.Root>
+                      <PopoverContent align='end' sideOffset={8} minWidth={160}>
+                        <PopoverItem
+                          onClick={handleImportWorkflow}
+                          disabled={!canEdit || isImporting}
+                        >
+                          <Download className='h-[14px] w-[14px]' />
+                          <span>{isImporting ? 'Importing...' : 'Import workflow'}</span>
+                        </PopoverItem>
+                        <PopoverItem
+                          onClick={handleCreateFolder}
+                          disabled={!canEdit || isCreatingFolder}
+                        >
+                          <FolderPlus className='h-[14px] w-[14px]' />
+                          <span>{isCreatingFolder ? 'Creating folder...' : 'Create folder'}</span>
+                        </PopoverItem>
+                      </PopoverContent>
+                    </Popover>
                     <Tooltip.Root>
                       <Tooltip.Trigger asChild>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant='ghost'
-                            className='h-[18px] w-[18px] rounded-[4px] p-0 hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
-                            disabled={!canEdit}
-                          >
-                            {isImporting || isCreatingFolder ? (
-                              <Loader className='h-[14px] w-[14px]' animate />
-                            ) : (
-                              <MoreHorizontal className='h-[14px] w-[14px]' />
-                            )}
-                          </Button>
-                        </PopoverTrigger>
+                        <Button
+                          variant='ghost'
+                          className='h-[18px] w-[18px] rounded-[4px] p-0 hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
+                          onClick={handleCreateWorkflow}
+                          disabled={isCreatingWorkflow || !canEdit}
+                        >
+                          <Plus className='h-[14px] w-[14px]' />
+                        </Button>
                       </Tooltip.Trigger>
                       <Tooltip.Content>
-                        <p>More actions</p>
+                        <p>{isCreatingWorkflow ? 'Creating workflow...' : 'Create workflow'}</p>
                       </Tooltip.Content>
                     </Tooltip.Root>
-                    <PopoverContent align='end' sideOffset={8} minWidth={160}>
-                      <PopoverItem
-                        onClick={handleImportWorkflow}
-                        disabled={!canEdit || isImporting}
-                      >
-                        <Download className='h-[14px] w-[14px]' />
-                        <span>{isImporting ? 'Importing...' : 'Import workflow'}</span>
-                      </PopoverItem>
-                      <PopoverItem
-                        onClick={handleCreateFolder}
-                        disabled={!canEdit || isCreatingFolder}
-                      >
-                        <FolderPlus className='h-[14px] w-[14px]' />
-                        <span>{isCreatingFolder ? 'Creating folder...' : 'Create folder'}</span>
-                      </PopoverItem>
-                    </PopoverContent>
-                  </Popover>
-                  <Tooltip.Root>
-                    <Tooltip.Trigger asChild>
-                      <Button
-                        variant='ghost'
-                        className='h-[18px] w-[18px] rounded-[4px] p-0 hover:bg-[var(--surface-6)] dark:hover:bg-[var(--surface-5)]'
-                        onClick={handleCreateWorkflow}
-                        disabled={isCreatingWorkflow || !canEdit}
-                      >
-                        <Plus className='h-[14px] w-[14px]' />
-                      </Button>
-                    </Tooltip.Trigger>
-                    <Tooltip.Content>
-                      <p>{isCreatingWorkflow ? 'Creating workflow...' : 'Create workflow'}</p>
-                    </Tooltip.Content>
-                  </Tooltip.Root>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Scrollable workflow list */}
-            <div
-              ref={scrollContainerRef}
-              className='mt-[6px] flex-1 overflow-y-auto overflow-x-hidden px-[8px]'
-            >
-              <WorkflowList
-                regularWorkflows={regularWorkflows}
-                isLoading={isLoading}
-                canReorder={canEdit}
-                handleFileChange={handleImportFileChange}
-                fileInputRef={fileInputRef}
-                scrollContainerRef={scrollContainerRef}
-                onCreateWorkflow={handleCreateWorkflow}
-                onCreateFolder={handleCreateFolder}
-                disableCreate={!canEdit || isCreatingWorkflow || isCreatingFolder}
-              />
+              <div className='mt-[6px] px-[8px]'>
+                <WorkflowList
+                  regularWorkflows={regularWorkflows}
+                  isLoading={isLoading}
+                  canReorder={canEdit}
+                  handleFileChange={handleImportFileChange}
+                  fileInputRef={fileInputRef}
+                  scrollContainerRef={scrollContainerRef}
+                  onCreateWorkflow={handleCreateWorkflow}
+                  onCreateFolder={handleCreateFolder}
+                  disableCreate={!canEdit || isCreatingWorkflow || isCreatingFolder}
+                />
+              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className='flex flex-shrink-0 flex-col gap-[2px] px-[8px] py-[8px]'>
+          <div
+            className={cn(
+              'flex flex-shrink-0 flex-col gap-[2px] border-t px-[8px] pt-[9px] pb-[8px] transition-colors duration-150',
+              !hasOverflowBottom && 'border-transparent'
+            )}
+          >
             {footerItems.map((item) => {
               const Icon = item.icon
 

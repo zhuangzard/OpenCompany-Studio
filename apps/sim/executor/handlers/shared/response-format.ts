@@ -54,9 +54,7 @@ export function parseResponseFormat(responseFormat?: string | object): any {
  * Accepts a JSON string or an array. Each entry must have
  * `role` (string) and `content` (string).
  */
-export function resolveMessages(
-  raw: unknown
-): Array<{ role: string; content: string }> {
+export function resolveMessages(raw: unknown): Array<{ role: string; content: string }> {
   if (!raw) {
     throw new Error('Messages input is required')
   }
@@ -76,9 +74,7 @@ export function resolveMessages(
 
   return messages.map((msg: any, i: number) => {
     if (!msg.role || typeof msg.content !== 'string') {
-      throw new Error(
-        `Message at index ${i} must have "role" (string) and "content" (string)`
-      )
+      throw new Error(`Message at index ${i} must have "role" (string) and "content" (string)`)
     }
     return { role: String(msg.role), content: msg.content }
   })

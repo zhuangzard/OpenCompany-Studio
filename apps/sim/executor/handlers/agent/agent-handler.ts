@@ -14,7 +14,6 @@ import {
 } from '@/ee/access-control/utils/permission-check'
 import { AGENT, BlockType, DEFAULTS, stripCustomToolPrefix } from '@/executor/constants'
 import { memoryService } from '@/executor/handlers/agent/memory'
-import { parseResponseFormat } from '@/executor/handlers/shared/response-format'
 import {
   buildLoadSkillTool,
   buildSkillsSystemPromptSection,
@@ -26,6 +25,7 @@ import type {
   StreamingConfig,
   ToolInput,
 } from '@/executor/handlers/agent/types'
+import { parseResponseFormat } from '@/executor/handlers/shared/response-format'
 import type { BlockHandler, ExecutionContext, StreamingExecution } from '@/executor/types'
 import { collectBlockData } from '@/executor/utils/block-data'
 import { buildAPIUrl, buildAuthHeaders } from '@/executor/utils/http'

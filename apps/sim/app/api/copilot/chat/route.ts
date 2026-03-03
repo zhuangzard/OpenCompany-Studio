@@ -433,6 +433,7 @@ export async function GET(req: NextRequest) {
           messages: copilotChats.messages,
           planArtifact: copilotChats.planArtifact,
           config: copilotChats.config,
+          conversationId: copilotChats.conversationId,
           createdAt: copilotChats.createdAt,
           updatedAt: copilotChats.updatedAt,
         })
@@ -452,6 +453,7 @@ export async function GET(req: NextRequest) {
         messageCount: Array.isArray(chat.messages) ? chat.messages.length : 0,
         planArtifact: chat.planArtifact || null,
         config: chat.config || null,
+        conversationId: chat.conversationId || null,
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
       }

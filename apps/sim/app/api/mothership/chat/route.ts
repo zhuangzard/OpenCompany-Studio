@@ -1,10 +1,14 @@
+import { db } from '@sim/db'
+import { copilotChats } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
+import { eq } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSession } from '@/lib/auth'
 import { resolveOrCreateChat } from '@/lib/copilot/chat-lifecycle'
 import { buildCopilotRequestPayload } from '@/lib/copilot/chat-payload'
 import { createSSEStream, SSE_RESPONSE_HEADERS } from '@/lib/copilot/chat-streaming'
+import type { OrchestratorResult } from '@/lib/copilot/orchestrator/types'
 import { createRequestTracker, createUnauthorizedResponse } from '@/lib/copilot/request-helpers'
 import { generateWorkspaceContext } from '@/lib/copilot/workspace-context'
 
@@ -107,6 +111,13 @@ export async function POST(req: NextRequest) {
         : []
     }
 
+    if (actualChatId) {
+      await db
+        .update(copilotChats)
+        .set({ conversationId: userMessageId })
+        .where(eq(copilotChats.id, actualChatId))
+    }
+
     const workspaceContext = await generateWorkspaceContext(workspaceId, authenticatedUserId)
 
     const requestPayload = await buildCopilotRequestPayload(
@@ -143,6 +154,41 @@ export async function POST(req: NextRequest) {
         goRoute: '/api/mothership',
         autoExecuteTools: true,
         interactive: false,
+        onComplete: async (result: OrchestratorResult) => {
+          if (!actualChatId) return
+
+          const userMessage = {
+            id: userMessageId,
+            role: 'user' as const,
+            content: message,
+            timestamp: new Date().toISOString(),
+          }
+
+          const assistantMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant' as const,
+            content: result.content,
+            timestamp: new Date().toISOString(),
+          }
+
+          const updatedMessages = [...conversationHistory, userMessage, assistantMessage]
+
+          try {
+            await db
+              .update(copilotChats)
+              .set({
+                messages: updatedMessages,
+                conversationId: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(copilotChats.id, actualChatId))
+          } catch (error) {
+            logger.error(`[${tracker.requestId}] Failed to persist chat messages`, {
+              chatId: actualChatId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            })
+          }
+        },
       },
     })
 

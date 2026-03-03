@@ -2,22 +2,59 @@
 
 import { useCallback, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { MOTHERSHIP_CHAT_API_PATH } from '@/lib/copilot/constants'
 import { MessageContent, UserInput } from './components'
 import { useChat } from './hooks'
 
-export function Home() {
-  const { workspaceId } = useParams<{ workspaceId: string }>()
-  const [inputValue, setInputValue] = useState('')
-  const { messages, isSending, error, sendMessage, stopGeneration, chatBottomRef } =
-    useChat(workspaceId)
+interface HomeProps {
+  chatId?: string
+  streamId?: string
+}
 
-  const handleSubmit = useCallback(() => {
+export function Home({ chatId, streamId }: HomeProps = {}) {
+  const { workspaceId } = useParams<{ workspaceId: string }>()
+  const router = useRouter()
+  const [inputValue, setInputValue] = useState('')
+  const { messages, isSending, sendMessage, stopGeneration, chatBottomRef } = useChat(
+    workspaceId,
+    chatId,
+    streamId
+  )
+
+  const handleSubmit = useCallback(async () => {
     const trimmed = inputValue.trim()
     if (!trimmed) return
     setInputValue('')
-    sendMessage(trimmed)
-  }, [inputValue, sendMessage])
+
+    if (chatId) {
+      sendMessage(trimmed)
+      return
+    }
+
+    const userMessageId = crypto.randomUUID()
+
+    try {
+      const response = await fetch(MOTHERSHIP_CHAT_API_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: trimmed,
+          workspaceId,
+          userMessageId,
+          createNewChat: true,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to start task')
+      response.body?.cancel()
+      router.push(
+        `/workspace/${workspaceId}/task/new?sid=${userMessageId}&m=${encodeURIComponent(trimmed)}`
+      )
+    } catch {
+      setInputValue(trimmed)
+    }
+  }, [inputValue, chatId, sendMessage, workspaceId, router])
 
   const hasMessages = messages.length > 0
 
@@ -84,12 +121,6 @@ export function Home() {
             <div ref={chatBottomRef} />
           </div>
         </div>
-
-        {error && (
-          <div className='px-[24px] pb-[8px]'>
-            <p className='text-[12px] text-red-500'>{error}</p>
-          </div>
-        )}
 
         <div className='flex-shrink-0 border-[var(--border)] border-t px-[24px] py-[16px]'>
           <UserInput
