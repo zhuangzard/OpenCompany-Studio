@@ -47,8 +47,8 @@ export function Home({ chatId }: HomeProps = {}) {
   return (
     <div className='flex h-full bg-[#FCFCFC] dark:bg-[var(--surface-2)]'>
       <div className='flex h-full min-w-0 flex-1 flex-col'>
-        <div className='min-h-0 flex-1 overflow-y-auto px-[16px] py-[16px]'>
-          <div className='mx-auto max-w-[768px] space-y-[16px]'>
+        <div className='min-h-0 flex-1 overflow-y-auto px-[24px] py-[16px]'>
+          <div className='mx-auto max-w-[640px] space-y-[16px]'>
             {messages.map((msg) => {
               if (msg.role === 'user') {
                 return (
@@ -91,7 +91,7 @@ export function Home({ chatId }: HomeProps = {}) {
           </div>
         </div>
 
-        <div className='flex-shrink-0 border-[var(--border)] border-t px-[24px] py-[16px]'>
+        <div className='flex-shrink-0 px-[24px] pb-[16px]'>
           <UserInput
             value={inputValue}
             onChange={setInputValue}

@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
         .set({
           messages: [...conversationHistory, userMsg],
           conversationId: userMessageId,
+          updatedAt: new Date(),
         })
         .where(eq(copilotChats.id, actualChatId))
     }

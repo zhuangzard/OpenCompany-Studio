@@ -158,12 +158,6 @@ export function createSSEStream(params: StreamingOrchestrationParams): ReadableS
           },
         })
 
-        if (currentChat) {
-          await db
-            .update(copilotChats)
-            .set({ updatedAt: new Date() })
-            .where(eq(copilotChats.id, chatId!))
-        }
         await eventWriter.close()
         await setStreamMeta(streamId, { status: 'complete', userId })
       } catch (error) {

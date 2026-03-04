@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { MOTHERSHIP_CHAT_API_PATH } from '@/lib/copilot/constants'
 import {
+  type TaskChatHistory,
   type TaskStoredContentBlock,
   type TaskStoredMessage,
   taskKeys,
@@ -71,6 +72,8 @@ function getPayloadData(payload: SSEPayload): SSEPayloadData | undefined {
 export function useChat(workspaceId: string, initialChatId?: string): UseChatReturn {
   const pathname = usePathname()
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const routerRef = useRef(router)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,6 +81,13 @@ export function useChat(workspaceId: string, initialChatId?: string): UseChatRet
   const chatIdRef = useRef<string | undefined>(initialChatId)
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const appliedChatIdRef = useRef<string | undefined>(undefined)
+  const pendingUserMsgRef = useRef<{ id: string; content: string } | null>(null)
+  const streamIdRef = useRef<string | undefined>(undefined)
+  const sendingRef = useRef(false)
+
+  useEffect(() => {
+    routerRef.current = router
+  }, [router])
 
   const isHomePage = pathname.endsWith('/home')
 
@@ -161,11 +171,17 @@ export function useChat(workspaceId: string, initialChatId?: string): UseChatRet
                 chatIdRef.current = parsed.chatId
                 queryClient.invalidateQueries({ queryKey: taskKeys.list(workspaceId) })
                 if (isNewChat) {
-                  window.history.replaceState(
-                    null,
-                    '',
-                    `/workspace/${workspaceId}/task/${parsed.chatId}`
-                  )
+                  const userMsg = pendingUserMsgRef.current
+                  const activeStreamId = streamIdRef.current
+                  if (userMsg && activeStreamId) {
+                    queryClient.setQueryData<TaskChatHistory>(taskKeys.detail(parsed.chatId), {
+                      id: parsed.chatId,
+                      title: null,
+                      messages: [{ id: userMsg.id, role: 'user', content: userMsg.content }],
+                      activeStreamId,
+                    })
+                  }
+                  routerRef.current.replace(`/workspace/${workspaceId}/task/${parsed.chatId}`)
                 }
               }
               break
@@ -266,7 +282,7 @@ export function useChat(workspaceId: string, initialChatId?: string): UseChatRet
 
   useEffect(() => {
     const activeStreamId = chatHistory?.activeStreamId
-    if (!activeStreamId || !appliedChatIdRef.current) return
+    if (!activeStreamId || !appliedChatIdRef.current || sendingRef.current) return
 
     const abortController = new AbortController()
     abortControllerRef.current = abortController
@@ -295,6 +311,7 @@ export function useChat(workspaceId: string, initialChatId?: string): UseChatRet
 
     return () => {
       abortController.abort()
+      appliedChatIdRef.current = undefined
     }
   }, [chatHistory?.activeStreamId, processSSEStream, finalize])
 
@@ -302,11 +319,32 @@ export function useChat(workspaceId: string, initialChatId?: string): UseChatRet
     async (message: string) => {
       if (!message.trim() || !workspaceId) return
 
+      abortControllerRef.current?.abort()
+
       setError(null)
       setIsSending(true)
+      sendingRef.current = true
 
       const userMessageId = crypto.randomUUID()
       const assistantId = crypto.randomUUID()
+
+      pendingUserMsgRef.current = { id: userMessageId, content: message }
+      streamIdRef.current = userMessageId
+
+      if (chatIdRef.current) {
+        queryClient.setQueryData<TaskChatHistory>(taskKeys.detail(chatIdRef.current), (old) =>
+          old
+            ? {
+                ...old,
+                messages: [
+                  ...old.messages,
+                  { id: userMessageId, role: 'user' as const, content: message },
+                ],
+                activeStreamId: userMessageId,
+              }
+            : undefined
+        )
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -343,10 +381,11 @@ export function useChat(workspaceId: string, initialChatId?: string): UseChatRet
         if (err instanceof Error && err.name === 'AbortError') return
         setError(err instanceof Error ? err.message : 'Failed to send message')
       } finally {
+        sendingRef.current = false
         finalize()
       }
     },
-    [workspaceId, processSSEStream, finalize]
+    [workspaceId, queryClient, processSSEStream, finalize]
   )
 
   const stopGeneration = useCallback(() => {
