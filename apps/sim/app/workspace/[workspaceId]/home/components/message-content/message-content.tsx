@@ -1,24 +1,27 @@
 'use client'
 
-import { Check, CircleAlert, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/core/utils/cn'
 import type { ContentBlock, ToolCallStatus } from '../../types'
 
 const REMARK_PLUGINS = [remarkGfm]
-const ICON_BASE = 'h-[12px] w-[12px] flex-shrink-0'
 
-function StatusIcon({ status }: { status: ToolCallStatus }) {
-  switch (status) {
-    case 'executing':
-      return <Loader2 className={cn(ICON_BASE, 'animate-spin text-[var(--text-tertiary)]')} />
-    case 'success':
-      return <Check className={cn(ICON_BASE, 'text-emerald-500')} />
-    case 'error':
-      return <CircleAlert className={cn(ICON_BASE, 'text-red-400')} />
-  }
-}
+const PROSE_CLASSES = cn(
+  'prose prose-base dark:prose-invert max-w-none font-body font-[380]',
+  'prose-headings:font-semibold prose-headings:tracking-[-0.01em] prose-headings:text-[var(--text-primary)]',
+  'prose-headings:mb-[12px] prose-headings:mt-[20px]',
+  'prose-p:text-[16px] prose-p:leading-[1.75] prose-p:tracking-[-0.015em] prose-p:text-[var(--text-primary)]',
+  'prose-p:mb-[8px]',
+  'prose-li:text-[16px] prose-li:leading-[1.75] prose-li:tracking-[-0.015em] prose-li:text-[var(--text-primary)]',
+  'prose-li:my-[4px]',
+  'prose-ul:my-[12px] prose-ol:my-[12px]',
+  'prose-strong:font-semibold prose-strong:text-[var(--text-primary)]',
+  'prose-a:text-[var(--brand-secondary)]',
+  'prose-code:rounded-[4px] prose-code:bg-[var(--surface-5)] prose-code:px-[5px] prose-code:py-[2px] prose-code:text-[13px] prose-code:font-mono prose-code:font-normal prose-code:text-[var(--text-primary)]',
+  'prose-pre:my-[14px] prose-pre:rounded-[8px] prose-pre:bg-[var(--surface-5)] prose-pre:text-[13px]',
+  'prose-hr:border-[var(--divider)]'
+)
 
 function formatToolName(name: string): string {
   return name
@@ -112,26 +115,22 @@ export function MessageContent({ blocks, fallbackContent, isStreaming }: Message
   if (segments.length === 0) return null
 
   return (
-    <>
+    <div className='space-y-[10px]'>
       {segments.map((segment, i) => {
         if (segment.type === 'text') {
           return (
-            <div
-              key={`text-${i}`}
-              className='prose prose-neutral prose-sm dark:prose-invert max-w-none'
-            >
+            <div key={`text-${i}`} className={PROSE_CLASSES}>
               <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{segment.content}</ReactMarkdown>
             </div>
           )
         }
 
         return (
-          <div key={segment.id} className='flex items-center gap-[8px] py-[4px]'>
-            <StatusIcon status={segment.status} />
-            <span className='text-[13px] text-[var(--text-secondary)]'>{segment.label}</span>
+          <div key={segment.id} className='font-base text-[13px] text-[var(--text-tertiary)]'>
+            {segment.label}
           </div>
         )
       })}
-    </>
+    </div>
   )
 }

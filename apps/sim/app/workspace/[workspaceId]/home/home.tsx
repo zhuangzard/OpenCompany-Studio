@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { MessageContent, UserInput } from './components'
 import { useChat } from './hooks'
@@ -53,8 +52,10 @@ export function Home({ chatId }: HomeProps = {}) {
               if (msg.role === 'user') {
                 return (
                   <div key={msg.id} className='flex justify-end'>
-                    <div className='max-w-[80%] rounded-[12px] bg-[var(--surface-5)] px-[10px] py-[8px] text-[14px] text-[var(--text-primary)]'>
-                      <p className='whitespace-pre-wrap'>{msg.content}</p>
+                    <div className='max-w-[80%] rounded-[16px] bg-[var(--surface-5)] px-[14px] py-[4px]'>
+                      <p className='whitespace-pre-wrap font-[380] font-body text-[16px] text-[var(--text-primary)] leading-[1.75] tracking-[-0.015em]'>
+                        {msg.content}
+                      </p>
                     </div>
                   </div>
                 )
@@ -65,12 +66,11 @@ export function Home({ chatId }: HomeProps = {}) {
 
               if (!hasBlocks && !msg.content && isThisStreaming) {
                 return (
-                  <div
-                    key={msg.id}
-                    className='flex items-center gap-[8px] py-[8px] text-[13px] text-[var(--text-tertiary)]'
-                  >
-                    <Loader2 className='h-[14px] w-[14px] animate-spin' />
-                    Thinking...
+                  <div key={msg.id} className='flex items-center gap-[6px] py-[8px]'>
+                    <div className='h-[6px] w-[6px] animate-pulse rounded-full bg-[var(--text-tertiary)]' />
+                    <span className='font-base text-[13px] text-[var(--text-tertiary)]'>
+                      Thinking…
+                    </span>
                   </div>
                 )
               }
@@ -78,7 +78,7 @@ export function Home({ chatId }: HomeProps = {}) {
               if (!hasBlocks && !msg.content) return null
 
               return (
-                <div key={msg.id} className='text-[14px] text-[var(--text-primary)]'>
+                <div key={msg.id}>
                   <MessageContent
                     blocks={msg.contentBlocks || []}
                     fallbackContent={msg.content}
@@ -98,7 +98,7 @@ export function Home({ chatId }: HomeProps = {}) {
             onSubmit={handleSubmit}
             isSending={isSending}
             onStopGeneration={stopGeneration}
-            animate={false}
+            isInitialView={false}
           />
         </div>
       </div>

@@ -14,7 +14,6 @@ import {
 } from '@/lib/copilot/chat-streaming'
 import { COPILOT_REQUEST_MODES } from '@/lib/copilot/models'
 import { orchestrateCopilotStream } from '@/lib/copilot/orchestrator'
-import { getUserEntityPermissions } from '@/lib/workspaces/permissions/utils'
 import {
   authenticateCopilotRequestSessionOnly,
   createBadRequestResponse,
@@ -23,6 +22,7 @@ import {
   createUnauthorizedResponse,
 } from '@/lib/copilot/request-helpers'
 import { resolveWorkflowIdForUser } from '@/lib/workflows/utils'
+import { getUserEntityPermissions } from '@/lib/workspaces/permissions/utils'
 
 const logger = createLogger('CopilotChatAPI')
 

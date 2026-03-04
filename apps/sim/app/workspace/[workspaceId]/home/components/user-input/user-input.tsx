@@ -1,13 +1,20 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp, Mic } from 'lucide-react'
+import { ArrowUp, Mic, Paperclip } from 'lucide-react'
 import { Button } from '@/components/emcn'
 import { cn } from '@/lib/core/utils/cn'
 import { useAnimatedPlaceholder } from '../../hooks'
 
-const TEXTAREA_CLASSES =
-  'm-0 box-border h-auto max-h-[30vh] min-h-[24px] w-full resize-none overflow-y-auto overflow-x-hidden break-words border-0 bg-transparent px-[4px] py-[4px] font-medium font-sans text-[14px] text-[var(--text-primary)] leading-[20px] outline-none placeholder:text-[var(--text-muted)] focus-visible:ring-0 focus-visible:ring-offset-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+const TEXTAREA_CLASSES = cn(
+  'm-0 box-border h-auto max-h-[30vh] min-h-[24px] w-full resize-none',
+  'overflow-y-auto overflow-x-hidden break-words border-0 bg-transparent',
+  'px-[4px] py-[4px] font-body text-[15px] leading-[24px] tracking-[-0.015em]',
+  'text-[var(--text-primary)] outline-none',
+  'placeholder:font-[350] placeholder:text-[var(--text-subtle)]',
+  'focus-visible:ring-0 focus-visible:ring-offset-0',
+  '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+)
 
 const SEND_BUTTON_BASE = 'h-[28px] w-[28px] rounded-full border-0 p-0 transition-colors'
 const SEND_BUTTON_ACTIVE =
@@ -26,7 +33,7 @@ interface UserInputProps {
   onSubmit: () => void
   isSending: boolean
   onStopGeneration: () => void
-  animate?: boolean
+  isInitialView?: boolean
 }
 
 export function UserInput({
@@ -35,10 +42,10 @@ export function UserInput({
   onSubmit,
   isSending,
   onStopGeneration,
-  animate = true,
+  isInitialView = true,
 }: UserInputProps) {
   const animatedPlaceholder = useAnimatedPlaceholder()
-  const placeholder = animate ? animatedPlaceholder : 'Send message to Sim'
+  const placeholder = isInitialView ? animatedPlaceholder : 'Send message to Sim'
   const canSubmit = value.trim().length > 0 && !isSending
 
   const [isListening, setIsListening] = useState(false)
@@ -124,7 +131,10 @@ export function UserInput({
   return (
     <div
       onClick={handleContainerClick}
-      className='mx-auto w-full max-w-[640px] cursor-text rounded-[12px] border border-[var(--border-1)] bg-white px-[10px] py-[8px] shadow-sm dark:bg-[var(--surface-4)]'
+      className={cn(
+        'mx-auto w-full max-w-[640px] cursor-text rounded-[20px] border border-[var(--border-1)] bg-[var(--white)] px-[10px] py-[8px] dark:bg-[var(--surface-4)]',
+        isInitialView && 'shadow-sm'
+      )}
     >
       <textarea
         ref={textareaRef}
@@ -136,46 +146,54 @@ export function UserInput({
         rows={1}
         className={TEXTAREA_CLASSES}
       />
-      <div className='flex items-center justify-end gap-[6px]'>
-        <button
-          type='button'
-          onClick={toggleListening}
-          className={cn(
-            'flex h-[28px] w-[28px] items-center justify-center rounded-full transition-colors',
-            isListening
-              ? 'bg-red-500 text-white hover:bg-red-600'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          )}
-          title={isListening ? 'Stop listening' : 'Voice input'}
-        >
-          <Mic className='h-[16px] w-[16px]' strokeWidth={2} />
-        </button>
-        {isSending ? (
-          <Button
-            onClick={onStopGeneration}
-            className={cn(SEND_BUTTON_BASE, SEND_BUTTON_ACTIVE)}
-            title='Stop generation'
+      <div className='flex items-center justify-between'>
+        <div className='flex h-[28px] w-[28px] cursor-pointer items-center justify-center rounded-full border border-[#F0F0F0] transition-colors hover:bg-[#F7F7F7] dark:border-[#3d3d3d] dark:hover:bg-[#303030]'>
+          <Paperclip className='h-[14px] w-[14px] text-[var(--text-muted)]' strokeWidth={2} />
+        </div>
+        <div className='flex items-center gap-[6px]'>
+          <button
+            type='button'
+            onClick={toggleListening}
+            className={cn(
+              'flex h-[28px] w-[28px] items-center justify-center rounded-full transition-colors',
+              isListening
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            )}
+            title={isListening ? 'Stop listening' : 'Voice input'}
           >
-            <svg
-              className='block h-[14px] w-[14px] fill-white dark:fill-black'
-              viewBox='0 0 24 24'
-              xmlns='http://www.w3.org/2000/svg'
+            <Mic className='h-[16px] w-[16px]' strokeWidth={2} />
+          </button>
+          {isSending ? (
+            <Button
+              onClick={onStopGeneration}
+              className={cn(SEND_BUTTON_BASE, SEND_BUTTON_ACTIVE)}
+              title='Stop generation'
             >
-              <rect x='4' y='4' width='16' height='16' rx='3' ry='3' />
-            </svg>
-          </Button>
-        ) : (
-          <Button
-            onClick={onSubmit}
-            disabled={!canSubmit}
-            className={cn(SEND_BUTTON_BASE, canSubmit ? SEND_BUTTON_ACTIVE : SEND_BUTTON_DISABLED)}
-          >
-            <ArrowUp
-              className='block h-[16px] w-[16px] text-white dark:text-black'
-              strokeWidth={2.25}
-            />
-          </Button>
-        )}
+              <svg
+                className='block h-[14px] w-[14px] fill-white dark:fill-black'
+                viewBox='0 0 24 24'
+                xmlns='http://www.w3.org/2000/svg'
+              >
+                <rect x='4' y='4' width='16' height='16' rx='3' ry='3' />
+              </svg>
+            </Button>
+          ) : (
+            <Button
+              onClick={onSubmit}
+              disabled={!canSubmit}
+              className={cn(
+                SEND_BUTTON_BASE,
+                canSubmit ? SEND_BUTTON_ACTIVE : SEND_BUTTON_DISABLED
+              )}
+            >
+              <ArrowUp
+                className='block h-[16px] w-[16px] text-white dark:text-black'
+                strokeWidth={2.25}
+              />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
