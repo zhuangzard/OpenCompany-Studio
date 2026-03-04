@@ -67,6 +67,16 @@ describe('validateJavaScript', () => {
     expect(validateJavaScript('async function foo() { await bar() }')).toBeNull()
   })
 
+  it('returns null for bare return statements (function block wraps in async fn)', () => {
+    expect(validateJavaScript('return 42')).toBeNull()
+    expect(validateJavaScript(sanitizeForParsing('return <Block.output>'))).toBeNull()
+    expect(validateJavaScript('const x = 1\nreturn x')).toBeNull()
+  })
+
+  it('returns null for await at top level (wrapped in async fn)', () => {
+    expect(validateJavaScript('const res = await fetch("url")')).toBeNull()
+  })
+
   it('returns null for valid ES module syntax', () => {
     expect(validateJavaScript('import { foo } from "bar"')).toBeNull()
     expect(validateJavaScript('export default function() {}')).toBeNull()
@@ -90,9 +100,9 @@ describe('validateJavaScript', () => {
     expect(result).toContain('Syntax error')
   })
 
-  it('includes line and column in error message', () => {
+  it('includes adjusted line and column in error message', () => {
     const result = validateJavaScript('const x = 1\nconst = 5')
-    expect(result).toMatch(/line \d+/)
+    expect(result).toMatch(/line 2/)
     expect(result).toMatch(/col \d+/)
   })
 

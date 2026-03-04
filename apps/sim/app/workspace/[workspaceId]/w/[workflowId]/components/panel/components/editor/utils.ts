@@ -46,18 +46,36 @@ export function sanitizeForParsing(code: string): string {
 
 /**
  * Validates JavaScript code for syntax errors using acorn.
+ *
+ * Tries two parse strategies to match the Function block's runtime behavior:
+ * 1. As a module (`import`/`export` are valid at top level)
+ * 2. Wrapped in `async () => { ... }` (bare `return`/`await` are valid)
+ *
+ * Only reports an error if both strategies fail, using the wrapped error
+ * since that's the primary execution context.
+ *
  * @returns Error message string, or null if valid.
  */
 export function validateJavaScript(code: string): string | null {
   try {
     parse(code, { ecmaVersion: 'latest', sourceType: 'module' })
     return null
+  } catch {
+    // Module parse failed — try as function body (allows bare return/await)
+  }
+
+  const wrapped = `(async () => {\n${code}\n})()`
+  try {
+    parse(wrapped, { ecmaVersion: 'latest', sourceType: 'script' })
+    return null
   } catch (e: unknown) {
     if (e instanceof SyntaxError) {
       const msg = e.message
       const match = msg.match(/\((\d+):(\d+)\)/)
       if (match) {
-        return `Syntax error at line ${match[1]}, col ${match[2]}: ${msg.replace(/\s*\(\d+:\d+\)/, '')}`
+        const adjustedLine = Number(match[1]) - 1
+        if (adjustedLine < 1) return null
+        return `Syntax error at line ${adjustedLine}, col ${match[2]}: ${msg.replace(/\s*\(\d+:\d+\)/, '')}`
       }
       return `Syntax error: ${msg}`
     }
