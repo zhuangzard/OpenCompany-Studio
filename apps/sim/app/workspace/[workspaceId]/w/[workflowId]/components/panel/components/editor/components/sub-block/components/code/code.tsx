@@ -31,7 +31,12 @@ import {
 } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/tag-dropdown/tag-dropdown'
 import { useSubBlockValue } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/hooks/use-sub-block-value'
 import type { WandControlHandlers } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/sub-block'
-import { restoreCursorAfterInsertion } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/utils'
+import {
+  restoreCursorAfterInsertion,
+  sanitizeForParsing,
+  validateJavaScript,
+  validatePython,
+} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/utils'
 import { WandPromptBar } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/wand-prompt-bar/wand-prompt-bar'
 import { useAccessibleReferencePrefixes } from '@/app/workspace/[workspaceId]/w/[workflowId]/hooks/use-accessible-reference-prefixes'
 import { useWand } from '@/app/workspace/[workspaceId]/w/[workflowId]/hooks/use-wand'
@@ -166,7 +171,7 @@ interface CodeProps {
   defaultCollapsed?: boolean
   defaultValue?: string | number | boolean | Record<string, unknown> | Array<unknown>
   showCopyButton?: boolean
-  onValidationChange?: (isValid: boolean) => void
+  onValidationChange?: (isValid: boolean, errorMessage?: string | null) => void
   wandConfig: {
     enabled: boolean
     prompt: string
@@ -249,6 +254,18 @@ export const Code = memo(function Code({
       return false
     }
   }, [shouldValidateJson, trimmedCode])
+
+  const syntaxError = useMemo(() => {
+    if (effectiveLanguage === 'json' || !trimmedCode) return null
+    const sanitized = sanitizeForParsing(trimmedCode)
+    if (effectiveLanguage === 'javascript') {
+      return validateJavaScript(sanitized)
+    }
+    if (effectiveLanguage === 'python') {
+      return validatePython(sanitized)
+    }
+    return null
+  }, [effectiveLanguage, trimmedCode])
 
   const gutterWidthPx = useMemo(() => {
     const lineCount = code.split('\n').length
@@ -341,19 +358,21 @@ export const Code = memo(function Code({
   useEffect(() => {
     if (!onValidationChange) return
 
-    const isValid = !shouldValidateJson || isValidJson
+    const isValid = (!shouldValidateJson || isValidJson) && !syntaxError
 
     if (isValid) {
-      onValidationChange(true)
+      onValidationChange(true, null)
       return
     }
 
+    const errorMessage = !isValidJson ? 'Invalid JSON' : syntaxError
+
     const timeoutId = setTimeout(() => {
-      onValidationChange(false)
+      onValidationChange(false, errorMessage)
     }, 150)
 
     return () => clearTimeout(timeoutId)
-  }, [isValidJson, onValidationChange, shouldValidateJson])
+  }, [isValidJson, syntaxError, onValidationChange, shouldValidateJson])
 
   useEffect(() => {
     handleStreamStartRef.current = () => {

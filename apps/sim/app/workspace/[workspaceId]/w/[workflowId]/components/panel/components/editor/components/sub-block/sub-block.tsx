@@ -189,7 +189,7 @@ const getPreviewValue = (
  * Renders the label with optional validation and description tooltips.
  *
  * @param config - The sub-block configuration defining the label content
- * @param isValidJson - Whether the JSON content is valid (for code blocks)
+ * @param codeValidation - Validation state for code blocks (valid flag + optional error message)
  * @param subBlockValues - Current values of all subblocks for evaluating conditional requirements
  * @param wandState - State and handlers for the inline AI generate feature
  * @param canonicalToggle - Metadata and handlers for the basic/advanced mode toggle
@@ -200,7 +200,7 @@ const getPreviewValue = (
  */
 const renderLabel = (
   config: SubBlockConfig,
-  isValidJson: boolean,
+  codeValidation: { isValid: boolean; errorMessage: string | null },
   subBlockValues?: Record<string, any>,
   wandState?: {
     isSearchActive: boolean
@@ -250,21 +250,18 @@ const renderLabel = (
         {config.title}
         {required && <span className='ml-0.5'>*</span>}
         {labelSuffix}
-        {config.type === 'code' &&
-          config.language === 'json' &&
-          !isValidJson &&
-          !wandState?.isStreaming && (
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <span className='inline-flex'>
-                  <AlertTriangle className='h-3 w-3 flex-shrink-0 cursor-pointer text-destructive' />
-                </span>
-              </Tooltip.Trigger>
-              <Tooltip.Content side='top'>
-                <p>Invalid JSON</p>
-              </Tooltip.Content>
-            </Tooltip.Root>
-          )}
+        {config.type === 'code' && !codeValidation.isValid && !wandState?.isStreaming && (
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <span className='inline-flex'>
+                <AlertTriangle className='h-3 w-3 flex-shrink-0 cursor-pointer text-destructive' />
+              </span>
+            </Tooltip.Trigger>
+            <Tooltip.Content side='top'>
+              <p>{codeValidation.errorMessage ?? 'Syntax error'}</p>
+            </Tooltip.Content>
+          </Tooltip.Root>
+        )}
       </Label>
       <div className='flex min-w-0 flex-1 items-center justify-end gap-[6px]'>
         {showCopy && (
@@ -466,7 +463,8 @@ function SubBlockComponent({
   const params = useParams()
   const workspaceId = params.workspaceId as string
 
-  const [isValidJson, setIsValidJson] = useState(true)
+  const [isValidCode, setIsValidCode] = useState(true)
+  const [codeErrorMessage, setCodeErrorMessage] = useState<string | null>(null)
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [copied, setCopied] = useState(false)
@@ -484,8 +482,9 @@ function SubBlockComponent({
     e.stopPropagation()
   }
 
-  const handleValidationChange = (isValid: boolean): void => {
-    setIsValidJson(isValid)
+  const handleValidationChange = (isValid: boolean, errorMessage?: string | null): void => {
+    setIsValidCode(isValid)
+    setCodeErrorMessage(errorMessage ?? null)
   }
 
   const isWandEnabled = config.wandConfig?.enabled ?? false
@@ -1151,7 +1150,7 @@ function SubBlockComponent({
     <div onMouseDown={handleMouseDown} className='subblock-content flex flex-col gap-[10px]'>
       {renderLabel(
         config,
-        isValidJson,
+        { isValid: isValidCode, errorMessage: codeErrorMessage },
         subBlockValues,
         {
           isSearchActive,
