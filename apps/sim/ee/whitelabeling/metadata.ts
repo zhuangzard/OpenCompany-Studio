@@ -131,11 +131,7 @@ export function generateStructuredData() {
     '@type': 'SoftwareApplication',
     name: 'Sim',
     description:
-<<<<<<< HEAD
       'Sim is the open-source platform to build AI agents and run your agentic workforce. Connect 1,000+ integrations and LLMs to deploy and orchestrate agentic workflows. Create agents, workflows, knowledge bases, tables, and docs. Trusted by over 100,000 builders. SOC2 and HIPAA compliant.',
-=======
-      'Sim is an open-source AI agent workflow builder. Developers at trail-blazing startups to Fortune 500 companies deploy agentic workflows on the Sim platform. 70,000+ developers already use Sim to build and deploy AI agent workflows and connect them to 100+ apps. Sim is SOC2 and HIPAA compliant, ensuring enterprise-level security.',
->>>>>>> staging
     url: getBaseUrl(),
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
