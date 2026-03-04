@@ -121,6 +121,14 @@ async function executeManageCustomTool(
     return { success: false, error: "Missing required 'operation' argument" }
   }
 
+  const writeOps: string[] = ['add', 'edit', 'delete']
+  if (writeOps.includes(operation) && context.userPermission && context.userPermission !== 'write' && context.userPermission !== 'admin') {
+    return {
+      success: false,
+      error: `Permission denied: '${operation}' on manage_custom_tool requires write access. You have '${context.userPermission}' permission.`,
+    }
+  }
+
   try {
     if (operation === 'list') {
       const toolsForUser = await listCustomTools({
@@ -481,6 +489,7 @@ async function executeServerToolDirect(
     const result = await routeExecution(toolName, enrichedParams, {
       userId: context.userId,
       workspaceId: context.workspaceId,
+      userPermission: context.userPermission,
     })
     return { success: true, output: result }
   } catch (error) {

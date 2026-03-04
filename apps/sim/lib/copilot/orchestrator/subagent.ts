@@ -18,6 +18,7 @@ export interface SubagentOrchestratorOptions extends Omit<OrchestratorOptions, '
   userId: string
   workflowId?: string
   workspaceId?: string
+  userPermission?: string
   onComplete?: (result: SubagentOrchestratorResult) => void | Promise<void>
 }
 
@@ -40,7 +41,7 @@ export async function orchestrateSubagentStream(
   requestPayload: Record<string, unknown>,
   options: SubagentOrchestratorOptions
 ): Promise<SubagentOrchestratorResult> {
-  const { userId, workflowId, workspaceId } = options
+  const { userId, workflowId, workspaceId, userPermission } = options
   const execContext = await buildExecutionContext(userId, workflowId, workspaceId)
 
   const msgId = requestPayload?.messageId
@@ -59,7 +60,12 @@ export async function orchestrateSubagentStream(
           'Content-Type': 'application/json',
           ...(env.COPILOT_API_KEY ? { 'x-api-key': env.COPILOT_API_KEY } : {}),
         },
-        body: JSON.stringify({ ...requestPayload, userId, stream: true }),
+        body: JSON.stringify({
+          ...requestPayload,
+          userId,
+          stream: true,
+          ...(userPermission ? { userPermission } : {}),
+        }),
       },
       context,
       execContext,
