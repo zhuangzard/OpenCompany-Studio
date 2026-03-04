@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Badge, ChevronDown } from '@/components/emcn'
 import { cn } from '@/lib/core/utils/cn'
+import { hexToRgba } from '@/lib/core/utils/color'
 import { TEMPLATE_WORKFLOWS } from '@/app/(home)/components/templates/template-workflows'
 
 const LandingPreviewWorkflow = dynamic(
@@ -18,13 +19,6 @@ const LandingPreviewWorkflow = dynamic(
     loading: () => <div className='h-full w-full bg-[#1b1b1b]' />,
   }
 )
-
-function hexToRgba(hex: string, alpha: number): string {
-  const r = Number.parseInt(hex.slice(1, 3), 16)
-  const g = Number.parseInt(hex.slice(3, 5), 16)
-  const b = Number.parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
 
 const LEFT_WALL_CLIP = 'polygon(0 8px, 100% 0, 100% 100%, 0 100%)'
 const BOTTOM_WALL_CLIP = 'polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%)'

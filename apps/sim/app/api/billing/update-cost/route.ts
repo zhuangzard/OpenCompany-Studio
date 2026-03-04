@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { userId, cost, model, inputTokens, outputTokens, source } = validation.data
+    const isCopilot = source === 'copilot' || source === 'mcp_copilot'
     const isMcp = source === 'mcp_copilot'
 
     logger.info(`[${requestId}] Processing cost update`, {
@@ -105,11 +106,14 @@ export async function POST(req: NextRequest) {
     const updateFields: Record<string, unknown> = {
       totalCost: sql`total_cost + ${cost}`,
       currentPeriodCost: sql`current_period_cost + ${cost}`,
-      totalCopilotCost: sql`total_copilot_cost + ${cost}`,
-      currentPeriodCopilotCost: sql`current_period_copilot_cost + ${cost}`,
-      totalCopilotCalls: sql`total_copilot_calls + 1`,
-      totalCopilotTokens: sql`total_copilot_tokens + ${totalTokens}`,
       lastActive: new Date(),
+    }
+
+    if (isCopilot) {
+      updateFields.totalCopilotCost = sql`total_copilot_cost + ${cost}`
+      updateFields.currentPeriodCopilotCost = sql`current_period_copilot_cost + ${cost}`
+      updateFields.totalCopilotCalls = sql`total_copilot_calls + 1`
+      updateFields.totalCopilotTokens = sql`total_copilot_tokens + ${totalTokens}`
     }
 
     if (isMcp) {
