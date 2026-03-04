@@ -10,11 +10,7 @@ export function TOCFooter() {
         <div className='text-balance font-semibold text-base leading-tight'>
           Start building today
         </div>
-<<<<<<< HEAD
         <div className='text-muted-foreground'>Trusted by over 100,000 builders.</div>
-=======
-        <div className='text-muted-foreground'>Trusted by over 70,000 builders.</div>
->>>>>>> staging
         <div className='text-muted-foreground'>
           The open-source platform to build AI agents and run your agentic workforce.
         </div>
