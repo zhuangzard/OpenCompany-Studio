@@ -19,10 +19,12 @@ import {
   calculateNextRunTime as calculateNextTime,
   getScheduleTimeValues,
   getSubBlockValue,
+  validateCronExpression,
 } from '@/lib/workflows/schedules/utils'
 import { ExecutionSnapshot } from '@/executor/execution/snapshot'
 import type { ExecutionMetadata } from '@/executor/execution/types'
 import { hasExecutionResult } from '@/executor/utils/errors'
+import { buildAPIUrl, buildAuthHeaders } from '@/executor/utils/http'
 import { MAX_CONSECUTIVE_FAILURES } from '@/triggers/constants'
 
 const logger = createLogger('TriggerScheduleExecution')
@@ -571,6 +573,218 @@ export async function executeScheduleJob(payload: ScheduleExecutionPayload) {
     }
   } catch (error: unknown) {
     logger.error(`[${requestId}] Error processing schedule ${payload.scheduleId}`, error)
+  }
+}
+
+export type JobExecutionPayload = {
+  scheduleId: string
+  cronExpression?: string
+  failedCount?: number
+  now: string
+}
+
+function buildJobPrompt(jobRecord: {
+  id: string
+  jobTitle: string | null
+  prompt: string | null
+  lifecycle: string
+  successCondition: string | null
+  runCount: number
+  maxRuns: number | null
+  sourceTaskName: string | null
+  sourceChatId: string | null
+}): string {
+  const parts: string[] = []
+
+  parts.push('--- JOB EXECUTION ---')
+  parts.push(`Job ID: ${jobRecord.id}`)
+  if (jobRecord.jobTitle) parts.push(`Title: ${jobRecord.jobTitle}`)
+
+  if (jobRecord.lifecycle === 'until_complete') {
+    parts.push(`Lifecycle: until_complete`)
+    if (jobRecord.successCondition) {
+      parts.push(`Success Condition: ${jobRecord.successCondition}`)
+    }
+    const runDisplay = jobRecord.maxRuns
+      ? `${jobRecord.runCount + 1} / ${jobRecord.maxRuns}`
+      : `${jobRecord.runCount + 1}`
+    parts.push(`Run: ${runDisplay}`)
+  }
+
+  parts.push('')
+  parts.push('TASK:')
+  parts.push(jobRecord.prompt || '')
+
+  if (jobRecord.sourceTaskName) {
+    parts.push('')
+    parts.push(`RELATED TASK: ${jobRecord.sourceTaskName}`)
+  }
+
+  if (jobRecord.sourceChatId) {
+    parts.push('Read the task\'s session.md in the VFS for conversation context.')
+  }
+
+  if (jobRecord.lifecycle === 'until_complete') {
+    parts.push('')
+    parts.push('COMPLETION PROTOCOL:')
+    parts.push('This is a poll-until-done job. After executing the task above:')
+    parts.push(`- If the success condition is met, take the required action, then call complete_job(jobId: "${jobRecord.id}") to stop the job.`)
+    parts.push('- If the success condition is NOT met, do nothing extra. The job will run again on schedule.')
+  }
+
+  parts.push('--- END JOB EXECUTION ---')
+
+  return parts.join('\n')
+}
+
+export async function executeJobInline(payload: JobExecutionPayload) {
+  const requestId = uuidv4().slice(0, 8)
+  const now = new Date(payload.now)
+
+  logger.info(`[${requestId}] Starting job execution`, { scheduleId: payload.scheduleId })
+
+  const [jobRecord] = await db
+    .select()
+    .from(workflowSchedule)
+    .where(eq(workflowSchedule.id, payload.scheduleId))
+    .limit(1)
+
+  if (!jobRecord || !jobRecord.prompt || !jobRecord.sourceUserId || !jobRecord.sourceWorkspaceId) {
+    logger.error(`[${requestId}] Job record missing required fields`, {
+      scheduleId: payload.scheduleId,
+    })
+    return
+  }
+
+  if (jobRecord.status === 'completed') {
+    logger.info(`[${requestId}] Job already completed, skipping`, { scheduleId: payload.scheduleId })
+    return
+  }
+
+  const promptText = buildJobPrompt(jobRecord)
+
+  try {
+    const url = buildAPIUrl('/api/mothership/execute')
+    const headers = await buildAuthHeaders()
+
+    const body = {
+      messages: [{ role: 'user', content: promptText }],
+      workspaceId: jobRecord.sourceWorkspaceId,
+      userId: jobRecord.sourceUserId,
+      chatId: jobRecord.sourceChatId || crypto.randomUUID(),
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error')
+      throw new Error(`Mothership execution failed (${response.status}): ${errorText}`)
+    }
+
+    let wasCompletedByTool = false
+    try {
+      const responseBody = await response.json()
+      const toolCalls = responseBody?.toolCalls as Array<{ name?: string }> | undefined
+      wasCompletedByTool = toolCalls?.some((tc) => tc.name === 'complete_job') ?? false
+    } catch {
+      // Response may not be JSON; proceed with normal flow
+    }
+
+    const newRunCount = (jobRecord.runCount || 0) + 1
+
+    logger.info(`[${requestId}] Job executed successfully`, {
+      scheduleId: payload.scheduleId,
+      runCount: newRunCount,
+      wasCompletedByTool,
+    })
+
+    if (wasCompletedByTool) {
+      await applyScheduleUpdate(
+        payload.scheduleId,
+        {
+          lastRanAt: now,
+          updatedAt: now,
+          runCount: newRunCount,
+          failedCount: 0,
+          lastQueuedAt: null,
+        },
+        requestId,
+        `Error updating job ${payload.scheduleId} after completion`
+      )
+      return
+    }
+
+    const isOneTime = !jobRecord.cronExpression
+    let nextRunAt: Date | null = null
+
+    if (!isOneTime && jobRecord.cronExpression) {
+      const validation = validateCronExpression(
+        jobRecord.cronExpression,
+        jobRecord.timezone || 'UTC'
+      )
+      nextRunAt = validation.nextRun || null
+    }
+
+    const maxRunsReached = jobRecord.maxRuns && newRunCount >= jobRecord.maxRuns
+    if (maxRunsReached) {
+      logger.info(`[${requestId}] Job hit maxRuns limit`, {
+        scheduleId: payload.scheduleId,
+        maxRuns: jobRecord.maxRuns,
+        runCount: newRunCount,
+      })
+    }
+
+    await applyScheduleUpdate(
+      payload.scheduleId,
+      {
+        lastRanAt: now,
+        updatedAt: now,
+        nextRunAt: isOneTime || maxRunsReached ? null : nextRunAt,
+        failedCount: 0,
+        lastQueuedAt: null,
+        runCount: newRunCount,
+        status: isOneTime || maxRunsReached ? 'completed' : 'active',
+      },
+      requestId,
+      `Error updating job ${payload.scheduleId} after success`
+    )
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error(`[${requestId}] Job execution failed`, {
+      scheduleId: payload.scheduleId,
+      error: errorMessage,
+    })
+
+    const newFailedCount = (payload.failedCount || 0) + 1
+    const shouldDisable = newFailedCount >= MAX_CONSECUTIVE_FAILURES
+
+    let nextRunAt: Date | null = null
+    if (jobRecord.cronExpression) {
+      const validation = validateCronExpression(
+        jobRecord.cronExpression,
+        jobRecord.timezone || 'UTC'
+      )
+      nextRunAt = validation.nextRun || null
+    }
+
+    await applyScheduleUpdate(
+      payload.scheduleId,
+      {
+        updatedAt: now,
+        nextRunAt,
+        failedCount: newFailedCount,
+        lastFailedAt: now,
+        lastQueuedAt: null,
+        runCount: (jobRecord.runCount || 0) + 1,
+        status: shouldDisable ? 'disabled' : 'active',
+      },
+      requestId,
+      `Error updating job ${payload.scheduleId} after failure`
+    )
   }
 }
 

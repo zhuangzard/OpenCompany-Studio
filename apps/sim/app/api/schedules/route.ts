@@ -125,43 +125,65 @@ async function handleWorkspaceSchedules(
 
   logger.info(`[${requestId}] Getting all schedules for workspace ${workspaceId}`)
 
-  const rows = await db
-    .select({
-      schedule: workflowSchedule,
-      workflowName: workflow.name,
-      workflowColor: workflow.color,
-    })
-    .from(workflowSchedule)
-    .innerJoin(workflow, eq(workflow.id, workflowSchedule.workflowId))
-    .leftJoin(
-      workflowDeploymentVersion,
-      and(
-        eq(workflowDeploymentVersion.workflowId, workflowSchedule.workflowId),
-        eq(workflowDeploymentVersion.isActive, true)
-      )
-    )
-    .where(
-      and(
-        eq(workflow.workspaceId, workspaceId),
-        eq(workflowSchedule.triggerType, 'schedule'),
-        or(
-          eq(workflowSchedule.deploymentVersionId, workflowDeploymentVersion.id),
-          and(isNull(workflowDeploymentVersion.id), isNull(workflowSchedule.deploymentVersionId))
+  const [workflowRows, jobRows] = await Promise.all([
+    db
+      .select({
+        schedule: workflowSchedule,
+        workflowName: workflow.name,
+        workflowColor: workflow.color,
+      })
+      .from(workflowSchedule)
+      .innerJoin(workflow, eq(workflow.id, workflowSchedule.workflowId))
+      .leftJoin(
+        workflowDeploymentVersion,
+        and(
+          eq(workflowDeploymentVersion.workflowId, workflowSchedule.workflowId),
+          eq(workflowDeploymentVersion.isActive, true)
         )
       )
-    )
+      .where(
+        and(
+          eq(workflow.workspaceId, workspaceId),
+          eq(workflowSchedule.triggerType, 'schedule'),
+          or(
+            eq(workflowSchedule.sourceType, 'workflow'),
+            isNull(workflowSchedule.sourceType)
+          ),
+          or(
+            eq(workflowSchedule.deploymentVersionId, workflowDeploymentVersion.id),
+            and(
+              isNull(workflowDeploymentVersion.id),
+              isNull(workflowSchedule.deploymentVersionId)
+            )
+          )
+        )
+      ),
+    db
+      .select({ schedule: workflowSchedule })
+      .from(workflowSchedule)
+      .where(
+        and(
+          eq(workflowSchedule.sourceWorkspaceId, workspaceId),
+          eq(workflowSchedule.sourceType, 'job')
+        )
+      ),
+  ])
 
   const headers = new Headers()
   headers.set('Cache-Control', 'no-store, max-age=0')
 
-  return NextResponse.json(
-    {
-      schedules: rows.map((r) => ({
-        ...r.schedule,
-        workflowName: r.workflowName,
-        workflowColor: r.workflowColor,
-      })),
-    },
-    { headers }
-  )
+  const schedules = [
+    ...workflowRows.map((r) => ({
+      ...r.schedule,
+      workflowName: r.workflowName,
+      workflowColor: r.workflowColor,
+    })),
+    ...jobRows.map((r) => ({
+      ...r.schedule,
+      workflowName: null,
+      workflowColor: null,
+    })),
+  ]
+
+  return NextResponse.json({ schedules }, { headers })
 }

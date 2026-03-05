@@ -11,6 +11,7 @@ import {
   workflowExecutionLogs,
   workflowMcpServer,
   workflowMcpTool,
+  workflowSchedule,
 } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
 import { and, desc, eq, isNull } from 'drizzle-orm'
@@ -33,6 +34,7 @@ import {
   serializeEnvironmentVariables,
   serializeFileMeta,
   serializeIntegrationSchema,
+  serializeJobMeta,
   serializeKBMeta,
   serializeMcpServer,
   serializeRecentExecutions,
@@ -209,6 +211,7 @@ function getStaticComponentFiles(): Map<string, string> {
  *   knowledgebases/{name}/documents.json
  *   tables/{name}/meta.json
  *   files/{name}/meta.json
+ *   jobs/{title}/meta.json
  *   tasks/{title}/session.md
  *   tasks/{title}/chat.json
  *   custom-tools/{name}.json
@@ -246,6 +249,7 @@ export class WorkspaceVFS {
       mcpServersSummary,
       skillsSummary,
       taskSummary,
+      jobsSummary,
       wsRow,
       members,
     ] = await Promise.all([
@@ -258,6 +262,7 @@ export class WorkspaceVFS {
       this.materializeMcpServers(workspaceId),
       this.materializeSkills(workspaceId),
       this.materializeTasks(workspaceId, userId),
+      this.materializeJobs(workspaceId),
       getWorkspaceWithOwner(workspaceId),
       getUsersWithPermissions(workspaceId),
     ])
@@ -276,6 +281,7 @@ export class WorkspaceVFS {
         customTools: toolsSummary,
         mcpServers: mcpServersSummary,
         skills: skillsSummary,
+        jobs: jobsSummary,
       })
     )
 
@@ -913,6 +919,84 @@ export class WorkspaceVFS {
       }))
     } catch (err) {
       logger.warn('Failed to materialize tasks', {
+        workspaceId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return []
+    }
+  }
+
+  /**
+   * Materialize scheduled jobs using the workflowSchedule table.
+   * Returns a summary for WORKSPACE.md generation.
+   */
+  private async materializeJobs(
+    workspaceId: string
+  ): Promise<NonNullable<WorkspaceMdData['jobs']>> {
+    try {
+      const jobRows = await db
+        .select({
+          id: workflowSchedule.id,
+          jobTitle: workflowSchedule.jobTitle,
+          prompt: workflowSchedule.prompt,
+          cronExpression: workflowSchedule.cronExpression,
+          timezone: workflowSchedule.timezone,
+          status: workflowSchedule.status,
+          lifecycle: workflowSchedule.lifecycle,
+          successCondition: workflowSchedule.successCondition,
+          maxRuns: workflowSchedule.maxRuns,
+          runCount: workflowSchedule.runCount,
+          nextRunAt: workflowSchedule.nextRunAt,
+          lastRanAt: workflowSchedule.lastRanAt,
+          sourceTaskName: workflowSchedule.sourceTaskName,
+          sourceChatId: workflowSchedule.sourceChatId,
+          createdAt: workflowSchedule.createdAt,
+        })
+        .from(workflowSchedule)
+        .where(
+          and(
+            eq(workflowSchedule.sourceWorkspaceId, workspaceId),
+            eq(workflowSchedule.sourceType, 'job')
+          )
+        )
+
+      for (const job of jobRows) {
+        const safeName = sanitizeName(job.jobTitle || job.id)
+        this.files.set(
+          `jobs/${safeName}/meta.json`,
+          serializeJobMeta({
+            id: job.id,
+            title: job.jobTitle,
+            prompt: job.prompt || '',
+            cronExpression: job.cronExpression,
+            timezone: job.timezone,
+            status: job.status,
+            lifecycle: job.lifecycle,
+            successCondition: job.successCondition,
+            maxRuns: job.maxRuns,
+            runCount: job.runCount,
+            nextRunAt: job.nextRunAt,
+            lastRanAt: job.lastRanAt,
+            sourceTaskName: job.sourceTaskName,
+            sourceChatId: job.sourceChatId,
+            createdAt: job.createdAt,
+          })
+        )
+      }
+
+      return jobRows
+        .filter((j) => j.status !== 'completed')
+        .map((j) => ({
+          id: j.id,
+          title: j.jobTitle,
+          prompt: j.prompt || '',
+          cronExpression: j.cronExpression,
+          status: j.status,
+          lifecycle: j.lifecycle,
+          sourceTaskName: j.sourceTaskName,
+        }))
+    } catch (err) {
+      logger.warn('Failed to materialize jobs', {
         workspaceId,
         error: err instanceof Error ? err.message : String(err),
       })

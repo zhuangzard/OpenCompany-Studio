@@ -132,8 +132,12 @@ function addContentBlock(context: StreamingContext, block: Omit<ContentBlock, 't
 }
 
 export const sseHandlers: Record<string, SSEHandler> = {
-  chat_id: (event, context) => {
-    context.chatId = asRecord(event.data).chatId as string | undefined
+  chat_id: (event, context, execContext) => {
+    const chatId = asRecord(event.data).chatId as string | undefined
+    context.chatId = chatId
+    if (chatId) {
+      execContext.chatId = chatId
+    }
   },
   title_updated: () => {},
   tool_result: (event, context) => {

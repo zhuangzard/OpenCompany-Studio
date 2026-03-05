@@ -43,6 +43,7 @@ import {
   executeUpdateWorkspaceMcpServer,
 } from './deployment-tools'
 import { executeIntegrationToolDirect } from './integration-tools'
+import { executeCompleteJob, executeCreateJob, executeManageJob } from './job-tools'
 import type {
   CheckDeploymentStatusParams,
   CreateFolderParams,
@@ -848,6 +849,9 @@ const SIM_WORKFLOW_TOOL_HANDLERS: Record<
     executeUpdateWorkspaceMcpServer(p as unknown as UpdateWorkspaceMcpServerParams, c),
   delete_workspace_mcp_server: (p, c) =>
     executeDeleteWorkspaceMcpServer(p as unknown as DeleteWorkspaceMcpServerParams, c),
+  create_job: (p, c) => executeCreateJob(p, c),
+  manage_job: (p, c) => executeManageJob(p, c),
+  complete_job: (p, c) => executeCompleteJob(p, c),
   oauth_get_auth_link: async (p, c) => {
     const providerName = (p.providerName || p.provider_name || 'the provider') as string
     const baseUrl = getBaseUrl()

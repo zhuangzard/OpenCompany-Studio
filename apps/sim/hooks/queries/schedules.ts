@@ -23,9 +23,16 @@ export interface ScheduleData {
 }
 
 export interface WorkspaceScheduleData extends ScheduleData {
-  workflowId: string
-  workflowName: string
-  workflowColor: string
+  workflowId: string | null
+  workflowName: string | null
+  workflowColor: string | null
+  sourceType: 'workflow' | 'job'
+  jobTitle: string | null
+  prompt: string | null
+  sourceTaskName: string | null
+  lifecycle: string | null
+  runCount: number | null
+  maxRuns: number | null
 }
 
 export interface ScheduleInfo {

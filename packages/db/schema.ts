@@ -486,9 +486,7 @@ export const workflowSchedule = pgTable(
   'workflow_schedule',
   {
     id: text('id').primaryKey(),
-    workflowId: text('workflow_id')
-      .notNull()
-      .references(() => workflow.id, { onDelete: 'cascade' }),
+    workflowId: text('workflow_id').references(() => workflow.id, { onDelete: 'cascade' }),
     deploymentVersionId: text('deployment_version_id').references(
       () => workflowDeploymentVersion.id,
       { onDelete: 'cascade' }
@@ -500,9 +498,22 @@ export const workflowSchedule = pgTable(
     lastQueuedAt: timestamp('last_queued_at'),
     triggerType: text('trigger_type').notNull(), // "manual", "webhook", "schedule"
     timezone: text('timezone').notNull().default('UTC'),
-    failedCount: integer('failed_count').notNull().default(0), // Track consecutive failures
-    status: text('status').notNull().default('active'), // 'active' or 'disabled'
-    lastFailedAt: timestamp('last_failed_at'), // When the schedule last failed
+    failedCount: integer('failed_count').notNull().default(0),
+    status: text('status').notNull().default('active'), // 'active', 'disabled', or 'completed'
+    lastFailedAt: timestamp('last_failed_at'),
+    sourceType: text('source_type').notNull().default('workflow'), // 'workflow' or 'job'
+    jobTitle: text('job_title'),
+    prompt: text('prompt'),
+    lifecycle: text('lifecycle').notNull().default('persistent'), // 'persistent' or 'until_complete'
+    successCondition: text('success_condition'),
+    maxRuns: integer('max_runs'),
+    runCount: integer('run_count').notNull().default(0),
+    sourceChatId: text('source_chat_id'),
+    sourceTaskName: text('source_task_name'),
+    sourceUserId: text('source_user_id').references(() => user.id, { onDelete: 'cascade' }),
+    sourceWorkspaceId: text('source_workspace_id').references(() => workspace.id, {
+      onDelete: 'cascade',
+    }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

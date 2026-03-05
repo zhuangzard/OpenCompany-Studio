@@ -145,6 +145,8 @@ export interface ExecutionContext {
   userId: string
   workflowId: string
   workspaceId?: string
+  chatId?: string
+  userTimezone?: string
   userPermission?: string
   decryptedEnvVars?: Record<string, string>
 }

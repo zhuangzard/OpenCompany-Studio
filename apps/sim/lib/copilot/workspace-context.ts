@@ -1,5 +1,5 @@
 import { db } from '@sim/db'
-import { account, copilotChats, knowledgeBase, mcpServers, userTableDefinitions, userTableRows, workflow, workspace } from '@sim/db/schema'
+import { account, copilotChats, knowledgeBase, mcpServers, userTableDefinitions, userTableRows, workflow, workspace, workflowSchedule } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
 import { and, count, desc, eq, isNull } from 'drizzle-orm'
 import { listWorkspaceFiles } from '@/lib/uploads/contexts/workspace'
@@ -27,6 +27,15 @@ export interface WorkspaceMdData {
   customTools?: Array<{ id: string; name: string }>
   mcpServers?: Array<{ id: string; name: string; url?: string | null; enabled: boolean }>
   skills?: Array<{ id: string; name: string; description: string }>
+  jobs?: Array<{
+    id: string
+    title: string | null
+    prompt: string
+    cronExpression: string | null
+    status: string
+    lifecycle: string
+    sourceTaskName: string | null
+  }>
 }
 
 /**
@@ -119,6 +128,20 @@ export function buildWorkspaceMd(data: WorkspaceMdData): string {
     sections.push(`## Skills (${data.skills.length})\n${lines.join('\n')}`)
   }
 
+  if (data.jobs && data.jobs.length > 0) {
+    const lines = data.jobs.map((j) => {
+      const displayName = j.title || j.id
+      let line = `- **${displayName}** (${j.id}) — ${j.status}`
+      if (j.lifecycle !== 'persistent') line += ` [${j.lifecycle}]`
+      if (j.cronExpression) line += `, cron: ${j.cronExpression}`
+      if (j.sourceTaskName) line += `, task: ${j.sourceTaskName}`
+      const promptPreview = j.prompt.length > 80 ? j.prompt.slice(0, 77) + '...' : j.prompt
+      line += `\n  ${promptPreview}`
+      return line
+    })
+    sections.push(`## Jobs (${data.jobs.length})\n${lines.join('\n')}`)
+  }
+
   if (data.tasks.length > 0) {
     const lines = data.tasks.map((t) => {
       const date = t.updatedAt.toISOString().split('T')[0]
@@ -140,7 +163,7 @@ export async function generateWorkspaceContext(
   userId: string
 ): Promise<string> {
   try {
-    const [wsRow, members, workflows, kbs, tables, files, credentials, recentTasks, customTools, mcpServerRows, skillRows] =
+    const [wsRow, members, workflows, kbs, tables, files, credentials, recentTasks, customTools, mcpServerRows, skillRows, jobRows] =
       await Promise.all([
         db
           .select({ id: workspace.id, name: workspace.name, ownerId: workspace.ownerId })
@@ -220,6 +243,24 @@ export async function generateWorkspaceContext(
           .where(and(eq(mcpServers.workspaceId, workspaceId), isNull(mcpServers.deletedAt))),
 
         listSkills({ workspaceId }),
+
+        db
+          .select({
+            id: workflowSchedule.id,
+            jobTitle: workflowSchedule.jobTitle,
+            prompt: workflowSchedule.prompt,
+            cronExpression: workflowSchedule.cronExpression,
+            status: workflowSchedule.status,
+            lifecycle: workflowSchedule.lifecycle,
+            sourceTaskName: workflowSchedule.sourceTaskName,
+          })
+          .from(workflowSchedule)
+          .where(
+            and(
+              eq(workflowSchedule.sourceWorkspaceId, workspaceId),
+              eq(workflowSchedule.sourceType, 'job')
+            )
+          ),
       ])
 
     const rowCounts =
@@ -251,6 +292,17 @@ export async function generateWorkspaceContext(
       customTools: customTools.map((t) => ({ id: t.id, name: t.title })),
       mcpServers: mcpServerRows,
       skills: skillRows.map((s) => ({ id: s.id, name: s.name, description: s.description })),
+      jobs: jobRows
+        .filter((j) => j.status !== 'completed')
+        .map((j) => ({
+          id: j.id,
+          title: j.jobTitle,
+          prompt: j.prompt || '',
+          cronExpression: j.cronExpression,
+          status: j.status,
+          lifecycle: j.lifecycle,
+          sourceTaskName: j.sourceTaskName,
+        })),
     })
   } catch (err) {
     logger.error('Failed to generate workspace context', {
