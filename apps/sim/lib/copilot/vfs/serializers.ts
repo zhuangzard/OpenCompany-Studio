@@ -488,6 +488,54 @@ export function serializeCustomTool(tool: {
 }
 
 /**
+ * Serialize an MCP server for VFS agent/mcp-servers/{name}.json
+ */
+export function serializeMcpServer(server: {
+  id: string
+  name: string
+  url: string | null
+  transport: string | null
+  enabled: boolean
+  connectionStatus: string | null
+}): string {
+  return JSON.stringify(
+    {
+      id: server.id,
+      name: server.name,
+      url: server.url,
+      transport: server.transport,
+      enabled: server.enabled,
+      connectionStatus: server.connectionStatus,
+    },
+    null,
+    2
+  )
+}
+
+/**
+ * Serialize a skill for VFS agent/skills/{name}.json
+ */
+export function serializeSkill(s: {
+  id: string
+  name: string
+  description: string
+  content: string
+  createdAt: Date
+}): string {
+  return JSON.stringify(
+    {
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      contentPreview: s.content.length > 500 ? `${s.content.slice(0, 500)}...` : s.content,
+      createdAt: s.createdAt.toISOString(),
+    },
+    null,
+    2
+  )
+}
+
+/**
  * Serialize an integration/tool schema for VFS components/integrations/{service}/{operation}.json
  */
 export function serializeIntegrationSchema(tool: ToolConfig): string {

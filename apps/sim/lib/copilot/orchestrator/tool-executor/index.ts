@@ -1,4 +1,7 @@
+import { db } from '@sim/db'
+import { mcpServers } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
+import { and, eq, isNull } from 'drizzle-orm'
 import { SIM_AGENT_API_URL } from '@/lib/copilot/constants'
 import type {
   ExecutionContext,
@@ -9,12 +12,20 @@ import { routeExecution } from '@/lib/copilot/tools/server/router'
 import { env } from '@/lib/core/config/env'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import { getEffectiveDecryptedEnv } from '@/lib/environment/utils'
+import { validateMcpDomain } from '@/lib/mcp/domain-check'
+import { mcpService } from '@/lib/mcp/service'
+import { generateMcpServerId } from '@/lib/mcp/utils'
 import {
   deleteCustomTool,
   getCustomToolById,
   listCustomTools,
   upsertCustomTools,
 } from '@/lib/workflows/custom-tools/operations'
+import {
+  deleteSkill,
+  listSkills,
+  upsertSkills,
+} from '@/lib/workflows/skills/operations'
 import { getWorkflowById } from '@/lib/workflows/utils'
 import { isMcpTool } from '@/executor/constants'
 import { executeTool } from '@/tools'
@@ -276,6 +287,393 @@ async function executeManageCustomTool(
   }
 }
 
+type ManageMcpToolOperation = 'add' | 'edit' | 'delete' | 'list'
+
+interface ManageMcpToolConfig {
+  name?: string
+  transport?: string
+  url?: string
+  headers?: Record<string, string>
+  timeout?: number
+  enabled?: boolean
+}
+
+interface ManageMcpToolParams {
+  operation?: string
+  serverId?: string
+  config?: ManageMcpToolConfig
+}
+
+async function executeManageMcpTool(
+  rawParams: Record<string, unknown>,
+  context: ExecutionContext
+): Promise<ToolCallResult> {
+  const params = rawParams as ManageMcpToolParams
+  const operation = String(params.operation || '').toLowerCase() as ManageMcpToolOperation
+  const workspaceId = context.workspaceId
+
+  if (!operation) {
+    return { success: false, error: "Missing required 'operation' argument" }
+  }
+
+  if (!workspaceId) {
+    return { success: false, error: 'workspaceId is required' }
+  }
+
+  const writeOps: string[] = ['add', 'edit', 'delete']
+  if (writeOps.includes(operation) && context.userPermission && context.userPermission !== 'write' && context.userPermission !== 'admin') {
+    return {
+      success: false,
+      error: `Permission denied: '${operation}' on manage_mcp_tool requires write access. You have '${context.userPermission}' permission.`,
+    }
+  }
+
+  try {
+    if (operation === 'list') {
+      const servers = await db
+        .select()
+        .from(mcpServers)
+        .where(and(eq(mcpServers.workspaceId, workspaceId), isNull(mcpServers.deletedAt)))
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          servers: servers.map((s) => ({
+            id: s.id,
+            name: s.name,
+            url: s.url,
+            transport: s.transport,
+            enabled: s.enabled,
+            connectionStatus: s.connectionStatus,
+          })),
+          count: servers.length,
+        },
+      }
+    }
+
+    if (operation === 'add') {
+      const config = params.config
+      if (!config?.name || !config?.url) {
+        return { success: false, error: "config.name and config.url are required for 'add'" }
+      }
+
+      validateMcpDomain(config.url)
+
+      const serverId = generateMcpServerId(workspaceId, config.url)
+
+      const [existing] = await db
+        .select({ id: mcpServers.id, deletedAt: mcpServers.deletedAt })
+        .from(mcpServers)
+        .where(and(eq(mcpServers.id, serverId), eq(mcpServers.workspaceId, workspaceId)))
+        .limit(1)
+
+      if (existing) {
+        await db
+          .update(mcpServers)
+          .set({
+            name: config.name,
+            transport: config.transport || 'streamable-http',
+            url: config.url,
+            headers: config.headers || {},
+            timeout: config.timeout || 30000,
+            enabled: config.enabled !== false,
+            connectionStatus: 'connected',
+            lastConnected: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+          })
+          .where(eq(mcpServers.id, serverId))
+      } else {
+        await db.insert(mcpServers).values({
+          id: serverId,
+          workspaceId,
+          createdBy: context.userId,
+          name: config.name,
+          description: '',
+          transport: config.transport || 'streamable-http',
+          url: config.url,
+          headers: config.headers || {},
+          timeout: config.timeout || 30000,
+          retries: 3,
+          enabled: config.enabled !== false,
+          connectionStatus: 'connected',
+          lastConnected: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      }
+
+      await mcpService.clearCache(workspaceId)
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          serverId,
+          name: config.name,
+          message: existing
+            ? `Updated existing MCP server "${config.name}"`
+            : `Added MCP server "${config.name}"`,
+        },
+      }
+    }
+
+    if (operation === 'edit') {
+      if (!params.serverId) {
+        return { success: false, error: "'serverId' is required for 'edit'" }
+      }
+      const config = params.config
+      if (!config) {
+        return { success: false, error: "'config' is required for 'edit'" }
+      }
+
+      if (config.url) {
+        validateMcpDomain(config.url)
+      }
+
+      const updateData: Record<string, unknown> = { updatedAt: new Date() }
+      if (config.name !== undefined) updateData.name = config.name
+      if (config.transport !== undefined) updateData.transport = config.transport
+      if (config.url !== undefined) updateData.url = config.url
+      if (config.headers !== undefined) updateData.headers = config.headers
+      if (config.timeout !== undefined) updateData.timeout = config.timeout
+      if (config.enabled !== undefined) updateData.enabled = config.enabled
+
+      const [updated] = await db
+        .update(mcpServers)
+        .set(updateData)
+        .where(
+          and(
+            eq(mcpServers.id, params.serverId),
+            eq(mcpServers.workspaceId, workspaceId),
+            isNull(mcpServers.deletedAt)
+          )
+        )
+        .returning()
+
+      if (!updated) {
+        return { success: false, error: `MCP server not found: ${params.serverId}` }
+      }
+
+      await mcpService.clearCache(workspaceId)
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          serverId: params.serverId,
+          name: updated.name,
+          message: `Updated MCP server "${updated.name}"`,
+        },
+      }
+    }
+
+    if (operation === 'delete') {
+      if (!params.serverId) {
+        return { success: false, error: "'serverId' is required for 'delete'" }
+      }
+
+      const [deleted] = await db
+        .delete(mcpServers)
+        .where(
+          and(
+            eq(mcpServers.id, params.serverId),
+            eq(mcpServers.workspaceId, workspaceId)
+          )
+        )
+        .returning()
+
+      if (!deleted) {
+        return { success: false, error: `MCP server not found: ${params.serverId}` }
+      }
+
+      await mcpService.clearCache(workspaceId)
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          serverId: params.serverId,
+          message: `Deleted MCP server "${deleted.name}"`,
+        },
+      }
+    }
+
+    return { success: false, error: `Unsupported operation for manage_mcp_tool: ${operation}` }
+  } catch (error) {
+    logger.error('manage_mcp_tool execution failed', {
+      operation,
+      workspaceId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to manage MCP server',
+    }
+  }
+}
+
+type ManageSkillOperation = 'add' | 'edit' | 'delete' | 'list'
+
+interface ManageSkillParams {
+  operation?: string
+  skillId?: string
+  name?: string
+  description?: string
+  content?: string
+}
+
+async function executeManageSkill(
+  rawParams: Record<string, unknown>,
+  context: ExecutionContext
+): Promise<ToolCallResult> {
+  const params = rawParams as ManageSkillParams
+  const operation = String(params.operation || '').toLowerCase() as ManageSkillOperation
+  const workspaceId = context.workspaceId
+
+  if (!operation) {
+    return { success: false, error: "Missing required 'operation' argument" }
+  }
+
+  if (!workspaceId) {
+    return { success: false, error: 'workspaceId is required' }
+  }
+
+  const writeOps: string[] = ['add', 'edit', 'delete']
+  if (writeOps.includes(operation) && context.userPermission && context.userPermission !== 'write' && context.userPermission !== 'admin') {
+    return {
+      success: false,
+      error: `Permission denied: '${operation}' on manage_skill requires write access. You have '${context.userPermission}' permission.`,
+    }
+  }
+
+  try {
+    if (operation === 'list') {
+      const skills = await listSkills({ workspaceId })
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          skills: skills.map((s) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            createdAt: s.createdAt,
+          })),
+          count: skills.length,
+        },
+      }
+    }
+
+    if (operation === 'add') {
+      if (!params.name || !params.description || !params.content) {
+        return {
+          success: false,
+          error: "'name', 'description', and 'content' are required for 'add'",
+        }
+      }
+
+      const resultSkills = await upsertSkills({
+        skills: [{ name: params.name, description: params.description, content: params.content }],
+        workspaceId,
+        userId: context.userId,
+      })
+      const created = resultSkills.find((s) => s.name === params.name)
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          skillId: created?.id,
+          name: params.name,
+          message: `Created skill "${params.name}"`,
+        },
+      }
+    }
+
+    if (operation === 'edit') {
+      if (!params.skillId) {
+        return { success: false, error: "'skillId' is required for 'edit'" }
+      }
+      if (!params.name && !params.description && !params.content) {
+        return {
+          success: false,
+          error: "At least one of 'name', 'description', or 'content' is required for 'edit'",
+        }
+      }
+
+      const existing = await listSkills({ workspaceId })
+      const found = existing.find((s) => s.id === params.skillId)
+      if (!found) {
+        return { success: false, error: `Skill not found: ${params.skillId}` }
+      }
+
+      await upsertSkills({
+        skills: [{
+          id: params.skillId,
+          name: params.name || found.name,
+          description: params.description || found.description,
+          content: params.content || found.content,
+        }],
+        workspaceId,
+        userId: context.userId,
+      })
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          skillId: params.skillId,
+          name: params.name || found.name,
+          message: `Updated skill "${params.name || found.name}"`,
+        },
+      }
+    }
+
+    if (operation === 'delete') {
+      if (!params.skillId) {
+        return { success: false, error: "'skillId' is required for 'delete'" }
+      }
+
+      const deleted = await deleteSkill({ skillId: params.skillId, workspaceId })
+      if (!deleted) {
+        return { success: false, error: `Skill not found: ${params.skillId}` }
+      }
+
+      return {
+        success: true,
+        output: {
+          success: true,
+          operation,
+          skillId: params.skillId,
+          message: 'Deleted skill',
+        },
+      }
+    }
+
+    return { success: false, error: `Unsupported operation for manage_skill: ${operation}` }
+  } catch (error) {
+    logger.error('manage_skill execution failed', {
+      operation,
+      workspaceId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to manage skill',
+    }
+  }
+}
+
 const SERVER_TOOLS = new Set<string>([
   'get_blocks_metadata',
   'get_trigger_blocks',
@@ -382,6 +780,8 @@ const SIM_WORKFLOW_TOOL_HANDLERS: Record<
     }
   },
   manage_custom_tool: (p, c) => executeManageCustomTool(p, c),
+  manage_mcp_tool: (p, c) => executeManageMcpTool(p, c),
+  manage_skill: (p, c) => executeManageSkill(p, c),
   // VFS tools
   grep: (p, c) => executeVfsGrep(p, c),
   glob: (p, c) => executeVfsGlob(p, c),

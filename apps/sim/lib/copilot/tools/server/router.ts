@@ -24,6 +24,8 @@ const WRITE_ACTIONS: Record<string, string[]> = {
   knowledge_base: ['create', 'add_document', 'delete'],
   user_table: ['create', 'insert', 'update', 'delete', 'delete_table'],
   manage_custom_tool: ['add', 'edit', 'delete'],
+  manage_mcp_tool: ['add', 'edit', 'delete'],
+  manage_skill: ['add', 'edit', 'delete'],
 }
 
 function isActionAllowed(toolName: string, action: string, userPermission: string): boolean {
