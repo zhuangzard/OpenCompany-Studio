@@ -1,10 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Clock, Search } from 'lucide-react'
+import { Calendar, Pause, Play, Search } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  Badge,
+  Button,
   Table,
   TableBody,
   TableCell,
@@ -12,12 +12,18 @@ import {
   TableHeader,
   TableRow,
   Tooltip,
+  Trash,
 } from '@/components/emcn'
 import { Input, Skeleton } from '@/components/ui'
 import { formatAbsoluteDate, formatRelativeTime } from '@/lib/core/utils/formatting'
 import { parseCronToHumanReadable } from '@/lib/workflows/schedules/utils'
 import type { WorkspaceScheduleData } from '@/hooks/queries/schedules'
-import { useWorkspaceSchedules } from '@/hooks/queries/schedules'
+import {
+  useDeleteSchedule,
+  useDisableSchedule,
+  useReactivateSchedule,
+  useWorkspaceSchedules,
+} from '@/hooks/queries/schedules'
 import { useDebounce } from '@/hooks/use-debounce'
 
 function getHumanReadable(s: WorkspaceScheduleData) {
@@ -38,38 +44,83 @@ function TimestampCell({ value }: { value: string | null }) {
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <Badge
-      className={
-        status === 'active' ? 'rounded-[4px] text-[12px]' : 'rounded-[4px] text-[12px] opacity-60'
-      }
-    >
-      {status}
-    </Badge>
-  )
-}
-
-function LifecycleBadge({
-  lifecycle,
-  runCount,
-  maxRuns,
+function ScheduleActions({
+  item,
+  workspaceId,
 }: {
-  lifecycle: string | null
-  runCount: number | null
-  maxRuns: number | null
+  item: WorkspaceScheduleData
+  workspaceId: string
 }) {
-  if (!lifecycle || lifecycle === 'persistent') {
-    return <span className='text-[12px] text-[var(--text-muted)]'>persistent</span>
-  }
-  const label = maxRuns ? `${runCount ?? 0}/${maxRuns}` : `${runCount ?? 0} runs`
+  const disable = useDisableSchedule()
+  const reactivate = useReactivateSchedule()
+  const remove = useDeleteSchedule()
+
+  const isActive = item.status === 'active'
+
   return (
-    <Tooltip.Root>
-      <Tooltip.Trigger asChild>
-        <span className='text-[12px] text-[var(--text-muted)]'>until_complete ({label})</span>
-      </Tooltip.Trigger>
-      <Tooltip.Content>Runs until success condition is met</Tooltip.Content>
-    </Tooltip.Root>
+    <div className='flex items-center gap-[4px]'>
+      {isActive ? (
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <Button
+              variant='ghost'
+              onClick={(e) => {
+                e.stopPropagation()
+                disable.mutate({ scheduleId: item.id, workspaceId })
+              }}
+              className='h-[28px] w-[28px] p-0'
+              disabled={disable.isPending}
+              aria-label='Disable schedule'
+            >
+              <Pause className='h-[14px] w-[14px]' />
+            </Button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>Disable</Tooltip.Content>
+        </Tooltip.Root>
+      ) : (
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <Button
+              variant='ghost'
+              onClick={(e) => {
+                e.stopPropagation()
+                reactivate.mutate({
+                  scheduleId: item.id,
+                  workflowId: item.workflowId ?? '',
+                  blockId: '',
+                  workspaceId,
+                })
+              }}
+              className='h-[28px] w-[28px] p-0'
+              disabled={reactivate.isPending}
+              aria-label='Enable schedule'
+            >
+              <Play className='h-[14px] w-[14px]' />
+            </Button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>Enable</Tooltip.Content>
+        </Tooltip.Root>
+      )}
+      {item.sourceType === 'job' && (
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <Button
+              variant='ghost'
+              onClick={(e) => {
+                e.stopPropagation()
+                remove.mutate({ scheduleId: item.id, workspaceId })
+              }}
+              className='h-[28px] w-[28px] p-0'
+              disabled={remove.isPending}
+              aria-label='Delete job'
+            >
+              <Trash className='h-[14px] w-[14px]' />
+            </Button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>Delete</Tooltip.Content>
+        </Tooltip.Root>
+      )}
+    </div>
   )
 }
 
@@ -108,7 +159,6 @@ export function SchedulesView() {
     return jobs.filter(
       (j) =>
         j.jobTitle?.toLowerCase().includes(q) ||
-        j.prompt?.toLowerCase().includes(q) ||
         j.sourceTaskName?.toLowerCase().includes(q) ||
         getHumanReadable(j).toLowerCase().includes(q)
     )
@@ -117,12 +167,12 @@ export function SchedulesView() {
   return (
     <div className='flex h-full flex-1 flex-col'>
       <div className='flex flex-1 overflow-hidden'>
-        <div className='flex h-full flex-1 flex-col overflow-auto bg-white px-[24px] pt-[28px] pb-[24px] dark:bg-[var(--bg)]'>
+        <div className='flex flex-1 flex-col overflow-auto bg-white px-[24px] pt-[28px] pb-[24px] dark:bg-[var(--bg)]'>
           {/* Header */}
           <div>
             <div className='flex items-start gap-[12px]'>
               <div className='flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[#F59E0B] bg-[#FFFBEB] dark:border-[#B45309] dark:bg-[#451A03]'>
-                <Clock className='h-[14px] w-[14px] text-[#F59E0B] dark:text-[#FBBF24]' />
+                <Calendar className='h-[14px] w-[14px] text-[#F59E0B] dark:text-[#FBBF24]' />
               </div>
               <h1 className='font-medium text-[18px]'>Schedules</h1>
             </div>
@@ -131,189 +181,214 @@ export function SchedulesView() {
             </p>
           </div>
 
-          {/* Search */}
-          <div className='mt-[14px] flex items-center justify-between'>
-            <div className='flex h-[32px] w-[400px] items-center gap-[6px] rounded-[8px] bg-[var(--surface-4)] px-[8px]'>
-              <Search className='h-[14px] w-[14px] text-[var(--text-subtle)]' />
-              <Input
-                placeholder='Search'
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className='flex-1 border-0 bg-transparent px-0 font-medium text-[var(--text-secondary)] text-small leading-none placeholder:text-[var(--text-subtle)] focus-visible:ring-0 focus-visible:ring-offset-0'
-              />
-            </div>
-          </div>
+          <ScheduleList
+            isLoading={isLoading}
+            error={error}
+            searchQuery={searchQuery}
+            debouncedSearchQuery={debouncedSearchQuery}
+            onSearchChange={setSearchQuery}
+            filteredSchedules={filteredSchedules}
+            filteredJobs={filteredJobs}
+            workspaceId={workspaceId}
+            onScheduleClick={(workflowId) =>
+              router.push(`/workspace/${workspaceId}/w/${workflowId}`)
+            }
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
 
-          {/* Content */}
-          <div className='mt-[24px] min-h-0 flex-1 space-y-[32px] overflow-y-auto'>
-            {isLoading ? (
-              <ScheduleTableSkeleton />
-            ) : error ? (
-              <div className='flex h-64 items-center justify-center rounded-lg border border-muted-foreground/25 bg-muted/20'>
-                <p className='text-[14px] text-[var(--text-muted)]'>Failed to load schedules</p>
-              </div>
-            ) : (
-              <>
-                {/* Schedules section */}
-                <section>
-                  <h2 className='mb-[12px] font-medium text-[15px] text-[var(--text-secondary)]'>
-                    Schedules
-                  </h2>
-                  {filteredSchedules.length === 0 ? (
-                    <div className='flex h-32 items-center justify-center rounded-lg border border-muted-foreground/25 bg-muted/20'>
-                      <p className='text-[13px] text-[var(--text-muted)]'>
-                        {debouncedSearchQuery
-                          ? `No schedules matching "${searchQuery}"`
-                          : 'No scheduled workflows yet'}
-                      </p>
-                    </div>
-                  ) : (
-                    <Table className='table-fixed text-[14px]'>
-                      <TableHeader>
-                        <TableRow className='hover:bg-transparent'>
-                          <TableHead className='w-[28%] px-[12px] py-[8px] text-[13px] text-[var(--text-secondary)]'>
-                            Workflow
-                          </TableHead>
-                          <TableHead className='w-[30%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Schedule
-                          </TableHead>
-                          <TableHead className='w-[12%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Status
-                          </TableHead>
-                          <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Next Run
-                          </TableHead>
-                          <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Last Run
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredSchedules.map((schedule) => (
-                          <TableRow
-                            key={schedule.id}
-                            className='cursor-pointer hover:bg-[var(--surface-2)]'
-                            onClick={() =>
-                              router.push(`/workspace/${workspaceId}/w/${schedule.workflowId}`)
+function ScheduleList({
+  isLoading,
+  error,
+  searchQuery,
+  debouncedSearchQuery,
+  onSearchChange,
+  filteredSchedules,
+  filteredJobs,
+  workspaceId,
+  onScheduleClick,
+}: {
+  isLoading: boolean
+  error: Error | null
+  searchQuery: string
+  debouncedSearchQuery: string
+  onSearchChange: (value: string) => void
+  filteredSchedules: WorkspaceScheduleData[]
+  filteredJobs: WorkspaceScheduleData[]
+  workspaceId: string
+  onScheduleClick: (workflowId: string) => void
+}) {
+  return (
+    <div className='flex h-full flex-col'>
+      {/* Search */}
+      <div className='mt-[14px] flex items-center justify-between'>
+        <div className='flex h-[32px] w-[400px] items-center gap-[6px] rounded-[8px] bg-[var(--surface-4)] px-[8px]'>
+          <Search className='h-[14px] w-[14px] text-[var(--text-subtle)]' />
+          <Input
+            placeholder='Search'
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className='flex-1 border-0 bg-transparent px-0 font-medium text-[var(--text-secondary)] text-small leading-none placeholder:text-[var(--text-subtle)] focus-visible:ring-0 focus-visible:ring-offset-0'
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className='mt-[24px] min-h-0 flex-1 overflow-y-auto'>
+        {isLoading ? (
+          <ScheduleTableSkeleton />
+        ) : error ? (
+          <div className='flex h-full items-center justify-center text-[14px] text-[var(--text-muted)]'>
+            Failed to load schedules
+          </div>
+        ) : filteredSchedules.length === 0 && filteredJobs.length === 0 ? (
+          <div className='flex h-full items-center justify-center text-[14px] text-[var(--text-muted)]'>
+            {debouncedSearchQuery
+              ? `No results matching "${searchQuery}"`
+              : 'No schedules or jobs yet'}
+          </div>
+        ) : (
+          <div className='space-y-[32px]'>
+            {/* Workflow schedules */}
+            {filteredSchedules.length > 0 && (
+              <section>
+                <h2 className='mb-[12px] font-medium text-[15px] text-[var(--text-secondary)]'>
+                  Schedules
+                </h2>
+                <Table className='table-fixed text-[14px]'>
+                  <TableHeader>
+                    <TableRow className='hover:bg-transparent'>
+                      <TableHead className='w-[30%] px-[12px] py-[8px] text-[13px] text-[var(--text-secondary)]'>
+                        Workflow
+                      </TableHead>
+                      <TableHead className='w-[26%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Schedule
+                      </TableHead>
+                      <TableHead className='w-[14%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Status
+                      </TableHead>
+                      <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Next Run
+                      </TableHead>
+                      <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSchedules.map((schedule) => (
+                      <TableRow
+                        key={schedule.id}
+                        className='cursor-pointer hover:bg-[var(--surface-2)]'
+                        onClick={() => {
+                          if (schedule.workflowId) onScheduleClick(schedule.workflowId)
+                        }}
+                      >
+                        <TableCell className='px-[12px] py-[8px]'>
+                          <div className='flex min-w-0 items-center gap-[8px]'>
+                            <div
+                              className='h-[8px] w-[8px] flex-shrink-0 rounded-full'
+                              style={{
+                                backgroundColor: schedule.workflowColor || '#3972F6',
+                              }}
+                            />
+                            <span className='min-w-0 truncate font-normal text-[15px] text-[var(--text-primary)]'>
+                              {schedule.workflowName}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
+                          {getHumanReadable(schedule)}
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px]'>
+                          <span
+                            className={
+                              schedule.status === 'active'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-[var(--text-muted)]'
                             }
                           >
-                            <TableCell className='px-[12px] py-[8px]'>
-                              <div className='flex min-w-0 items-center gap-[8px]'>
-                                <div
-                                  className='h-[8px] w-[8px] flex-shrink-0 rounded-full'
-                                  style={{
-                                    backgroundColor: schedule.workflowColor || '#3972F6',
-                                  }}
-                                />
-                                <span className='truncate text-[14px] text-[var(--text-primary)]'>
-                                  {schedule.workflowName}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className='px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                              <span className='truncate'>{getHumanReadable(schedule)}</span>
-                            </TableCell>
-                            <TableCell className='px-[12px] py-[8px]'>
-                              <StatusBadge status={schedule.status} />
-                            </TableCell>
-                            <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                              <TimestampCell value={schedule.nextRunAt} />
-                            </TableCell>
-                            <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                              <TimestampCell value={schedule.lastRanAt} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </section>
+                            {schedule.status}
+                          </span>
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
+                          <TimestampCell value={schedule.nextRunAt} />
+                        </TableCell>
+                        <TableCell className='px-[12px] py-[8px]'>
+                          <ScheduleActions item={schedule} workspaceId={workspaceId} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
 
-                {/* Jobs section */}
-                <section>
-                  <h2 className='mb-[12px] font-medium text-[15px] text-[var(--text-secondary)]'>
-                    Jobs
-                  </h2>
-                  {filteredJobs.length === 0 ? (
-                    <div className='flex h-32 items-center justify-center rounded-lg border border-muted-foreground/25 bg-muted/20'>
-                      <p className='text-[13px] text-[var(--text-muted)]'>
-                        {debouncedSearchQuery
-                          ? `No jobs matching "${searchQuery}"`
-                          : 'No jobs yet'}
-                      </p>
-                    </div>
-                  ) : (
-                    <Table className='table-fixed text-[14px]'>
-                      <TableHeader>
-                        <TableRow className='hover:bg-transparent'>
-                          <TableHead className='w-[18%] px-[12px] py-[8px] text-[13px] text-[var(--text-secondary)]'>
-                            Title
-                          </TableHead>
-                          <TableHead className='w-[22%] px-[12px] py-[8px] text-[13px] text-[var(--text-secondary)]'>
-                            Prompt
-                          </TableHead>
-                          <TableHead className='w-[16%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Schedule
-                          </TableHead>
-                          <TableHead className='w-[10%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Status
-                          </TableHead>
-                          <TableHead className='w-[10%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Lifecycle
-                          </TableHead>
-                          <TableHead className='w-[12%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Next Run
-                          </TableHead>
-                          <TableHead className='w-[12%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
-                            Last Run
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredJobs.map((job) => (
-                          <TableRow key={job.id} className='hover:bg-[var(--surface-2)]'>
-                            <TableCell className='px-[12px] py-[8px]'>
-                              <span className='truncate text-[14px] text-[var(--text-primary)]'>
-                                {job.jobTitle || '—'}
-                              </span>
-                            </TableCell>
-                            <TableCell className='px-[12px] py-[8px]'>
-                              <Tooltip.Root>
-                                <Tooltip.Trigger asChild>
-                                  <span className='line-clamp-1 text-[13px] text-[var(--text-muted)]'>
-                                    {job.prompt}
-                                  </span>
-                                </Tooltip.Trigger>
-                                <Tooltip.Content className='max-w-[400px]'>
-                                  {job.prompt}
-                                </Tooltip.Content>
-                              </Tooltip.Root>
-                            </TableCell>
-                            <TableCell className='px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                              <span className='truncate'>{getHumanReadable(job)}</span>
-                            </TableCell>
-                            <TableCell className='px-[12px] py-[8px]'>
-                              <StatusBadge status={job.status} />
-                            </TableCell>
-                            <TableCell className='px-[12px] py-[8px]'>
-                              <LifecycleBadge lifecycle={job.lifecycle} runCount={job.runCount} maxRuns={job.maxRuns} />
-                            </TableCell>
-                            <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                              <TimestampCell value={job.nextRunAt} />
-                            </TableCell>
-                            <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                              <TimestampCell value={job.lastRanAt} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </section>
-              </>
+            {/* Jobs */}
+            {filteredJobs.length > 0 && (
+              <section>
+                <h2 className='mb-[12px] font-medium text-[15px] text-[var(--text-secondary)]'>
+                  Jobs
+                </h2>
+                <Table className='table-fixed text-[14px]'>
+                  <TableHeader>
+                    <TableRow className='hover:bg-transparent'>
+                      <TableHead className='w-[30%] px-[12px] py-[8px] text-[13px] text-[var(--text-secondary)]'>
+                        Title
+                      </TableHead>
+                      <TableHead className='w-[26%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Schedule
+                      </TableHead>
+                      <TableHead className='w-[14%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Status
+                      </TableHead>
+                      <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Next Run
+                      </TableHead>
+                      <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredJobs.map((job) => (
+                      <TableRow key={job.id} className='hover:bg-[var(--surface-2)]'>
+                        <TableCell className='px-[12px] py-[8px]'>
+                          <span className='min-w-0 truncate font-normal text-[15px] text-[var(--text-primary)]'>
+                            {job.jobTitle || job.sourceTaskName || '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
+                          {getHumanReadable(job)}
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px]'>
+                          <span
+                            className={
+                              job.status === 'active'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-[var(--text-muted)]'
+                            }
+                          >
+                            {job.status}
+                          </span>
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
+                          <TimestampCell value={job.nextRunAt} />
+                        </TableCell>
+                        <TableCell className='px-[12px] py-[8px]'>
+                          <ScheduleActions item={job} workspaceId={workspaceId} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </section>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
@@ -324,13 +399,13 @@ function ScheduleTableSkeleton() {
     <Table className='table-fixed text-[14px]'>
       <TableHeader>
         <TableRow className='hover:bg-transparent'>
-          <TableHead className='w-[28%] px-[12px] py-[8px]'>
+          <TableHead className='w-[30%] px-[12px] py-[8px]'>
             <Skeleton className='h-[12px] w-[60px]' />
           </TableHead>
-          <TableHead className='w-[30%] px-[12px] py-[8px]'>
+          <TableHead className='w-[26%] px-[12px] py-[8px]'>
             <Skeleton className='h-[12px] w-[56px]' />
           </TableHead>
-          <TableHead className='w-[12%] px-[12px] py-[8px]'>
+          <TableHead className='w-[14%] px-[12px] py-[8px]'>
             <Skeleton className='h-[12px] w-[40px]' />
           </TableHead>
           <TableHead className='w-[15%] px-[12px] py-[8px]'>
@@ -342,7 +417,7 @@ function ScheduleTableSkeleton() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {Array.from({ length: 5 }, (_, i) => (
+        {Array.from({ length: 3 }, (_, i) => (
           <TableRow key={i} className='hover:bg-transparent'>
             <TableCell className='px-[12px] py-[8px]'>
               <div className='flex min-w-0 items-center gap-[8px]'>
@@ -350,17 +425,19 @@ function ScheduleTableSkeleton() {
                 <Skeleton className='h-[14px] w-[140px]' />
               </div>
             </TableCell>
-            <TableCell className='px-[12px] py-[8px]'>
-              <Skeleton className='h-[12px] w-[160px]' />
+            <TableCell className='whitespace-nowrap px-[12px] py-[8px]'>
+              <Skeleton className='h-[12px] w-[120px]' />
             </TableCell>
-            <TableCell className='px-[12px] py-[8px]'>
+            <TableCell className='whitespace-nowrap px-[12px] py-[8px]'>
               <Skeleton className='h-[12px] w-[48px]' />
             </TableCell>
-            <TableCell className='px-[12px] py-[8px]'>
-              <Skeleton className='h-[12px] w-[60px]' />
+            <TableCell className='whitespace-nowrap px-[12px] py-[8px]'>
+              <Skeleton className='h-[12px] w-[56px]' />
             </TableCell>
             <TableCell className='px-[12px] py-[8px]'>
-              <Skeleton className='h-[12px] w-[60px]' />
+              <div className='flex items-center gap-[4px]'>
+                <Skeleton className='h-[28px] w-[28px] rounded-[4px]' />
+              </div>
             </TableCell>
           </TableRow>
         ))}
