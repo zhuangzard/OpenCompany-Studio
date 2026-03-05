@@ -25,11 +25,11 @@ const SAFE_ENV_KEYS = ['PATH', 'HOME', 'SHELL', 'USER', 'LOGNAME', 'LANG', 'TERM
  * Returns a minimal base environment for child processes.
  * Only includes POSIX essentials — never server secrets like DATABASE_URL, AUTH_SECRET, etc.
  */
-function getSafeBaseEnv(): Record<string, string> {
-  const env: Record<string, string> = {}
+function getSafeBaseEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { NODE_ENV: process.env.NODE_ENV }
   for (const key of SAFE_ENV_KEYS) {
     if (process.env[key]) {
-      env[key] = process.env[key]!
+      env[key] = process.env[key]
     }
   }
   return env
