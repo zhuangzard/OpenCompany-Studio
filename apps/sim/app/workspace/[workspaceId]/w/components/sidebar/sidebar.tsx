@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createLogger } from '@sim/logger'
-import { Database, Files, HelpCircle, MoreHorizontal, Plus, Search, Settings } from 'lucide-react'
+import { Clock, Database, Files, HelpCircle, MoreHorizontal, Plus, Search, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import {
@@ -315,6 +315,12 @@ export const Sidebar = memo(function Sidebar() {
           label: 'Logs',
           icon: Library,
           href: `/workspace/${workspaceId}/logs`,
+        },
+        {
+          id: 'schedules',
+          label: 'Schedules',
+          icon: Clock,
+          href: `/workspace/${workspaceId}/schedules`,
         },
       ].filter((item) => !item.hidden),
     [

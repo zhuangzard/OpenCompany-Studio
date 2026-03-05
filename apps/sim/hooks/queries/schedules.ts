@@ -7,6 +7,7 @@ const logger = createLogger('ScheduleQueries')
 
 export const scheduleKeys = {
   all: ['schedules'] as const,
+  list: (workspaceId: string) => [...scheduleKeys.all, 'list', workspaceId] as const,
   schedule: (workflowId: string, blockId: string) =>
     [...scheduleKeys.all, workflowId, blockId] as const,
 }
@@ -19,6 +20,12 @@ export interface ScheduleData {
   lastRanAt: string | null
   timezone: string
   failedCount: number
+}
+
+export interface WorkspaceScheduleData extends ScheduleData {
+  workflowId: string
+  workflowName: string
+  workflowColor: string
 }
 
 export interface ScheduleInfo {
@@ -48,6 +55,33 @@ async function fetchSchedule(workflowId: string, blockId: string): Promise<Sched
 
   const data = await response.json()
   return data.schedule || null
+}
+
+/**
+ * Fetch all schedules for a workspace.
+ */
+export function useWorkspaceSchedules(workspaceId?: string) {
+  return useQuery({
+    queryKey: scheduleKeys.list(workspaceId ?? ''),
+    queryFn: async () => {
+      if (!workspaceId) throw new Error('Workspace ID required')
+
+      const res = await fetch(`/api/schedules?workspaceId=${encodeURIComponent(workspaceId)}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Failed to fetch schedules')
+      }
+
+      const data = await res.json()
+      return (data.schedules || []) as WorkspaceScheduleData[]
+    },
+    enabled: Boolean(workspaceId),
+    staleTime: 30 * 1000,
+  })
 }
 
 /**
