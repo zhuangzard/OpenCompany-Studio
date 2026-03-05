@@ -23,9 +23,9 @@ export function startMemoryTelemetry(intervalMs = 60_000) {
   started = true
 
   const timer = setInterval(() => {
-    // Force garbage collection if running on Bun.
-    // This triggers JSC GC + mimalloc page purge, helping reclaim RSS
-    // that mimalloc otherwise retains indefinitely under sustained load.
+    // Trigger opportunistic (non-blocking) garbage collection if running on Bun.
+    // This signals JSC GC + mimalloc page purge without blocking the event loop,
+    // helping reclaim RSS that mimalloc otherwise retains under sustained load.
     const bunGlobal = (globalThis as Record<string, unknown>).Bun as
       | { gc?: (force: boolean) => void }
       | undefined
