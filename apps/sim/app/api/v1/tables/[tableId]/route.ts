@@ -1,48 +1,57 @@
 import { createLogger } from '@sim/logger'
 import { type NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
+import { AuditAction, AuditResourceType, recordAudit } from '@/lib/audit/log'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { deleteTable, type TableSchema } from '@/lib/table'
 import { accessError, checkAccess, normalizeColumn } from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+} from '@/app/api/v1/middleware'
 
-const logger = createLogger('TableDetailAPI')
+const logger = createLogger('V1TableDetailAPI')
 
-const GetTableSchema = z.object({
-  workspaceId: z.string().min(1, 'Workspace ID is required'),
-})
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 interface TableRouteParams {
   params: Promise<{ tableId: string }>
 }
 
-/** GET /api/table/[tableId] - Retrieves a single table's details. */
+/** GET /api/v1/tables/[tableId] — Get table details. */
 export async function GET(request: NextRequest, { params }: TableRouteParams) {
   const requestId = generateRequestId()
-  const { tableId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      logger.warn(`[${requestId}] Unauthorized table access attempt`)
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
 
+    const userId = rateLimit.userId!
+    const { tableId } = await params
     const { searchParams } = new URL(request.url)
-    const validated = GetTableSchema.parse({
-      workspaceId: searchParams.get('workspaceId'),
-    })
+    const workspaceId = searchParams.get('workspaceId')
 
-    const result = await checkAccess(tableId, authResult.userId, 'read')
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'workspaceId query parameter is required' },
+        { status: 400 }
+      )
+    }
+
+    const scopeError = checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'read')
     if (!result.ok) return accessError(result, requestId, tableId)
 
     const { table } = result
 
-    if (table.workspaceId !== validated.workspaceId) {
+    if (table.workspaceId !== workspaceId) {
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
-
-    logger.info(`[${requestId}] Retrieved table ${tableId} for user ${authResult.userId}`)
 
     const schemaData = table.schema as TableSchema
 
@@ -70,45 +79,55 @@ export async function GET(request: NextRequest, { params }: TableRouteParams) {
       },
     })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
     logger.error(`[${requestId}] Error getting table:`, error)
     return NextResponse.json({ error: 'Failed to get table' }, { status: 500 })
   }
 }
 
-/** DELETE /api/table/[tableId] - Deletes a table and all its rows. */
+/** DELETE /api/v1/tables/[tableId] — Delete a table. */
 export async function DELETE(request: NextRequest, { params }: TableRouteParams) {
   const requestId = generateRequestId()
-  const { tableId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      logger.warn(`[${requestId}] Unauthorized table delete attempt`)
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
 
+    const userId = rateLimit.userId!
+    const { tableId } = await params
     const { searchParams } = new URL(request.url)
-    const validated = GetTableSchema.parse({
-      workspaceId: searchParams.get('workspaceId'),
-    })
+    const workspaceId = searchParams.get('workspaceId')
 
-    const result = await checkAccess(tableId, authResult.userId, 'write')
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'workspaceId query parameter is required' },
+        { status: 400 }
+      )
+    }
+
+    const scopeError = checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'write')
     if (!result.ok) return accessError(result, requestId, tableId)
 
-    const { table } = result
-
-    if (table.workspaceId !== validated.workspaceId) {
+    if (result.table.workspaceId !== workspaceId) {
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 
     await deleteTable(tableId, requestId)
+
+    recordAudit({
+      workspaceId,
+      actorId: userId,
+      action: AuditAction.TABLE_DELETED,
+      resourceType: AuditResourceType.TABLE,
+      resourceId: tableId,
+      resourceName: result.table.name,
+      description: `Deleted table "${result.table.name}"`,
+      request,
+    })
 
     return NextResponse.json({
       success: true,
@@ -117,13 +136,6 @@ export async function DELETE(request: NextRequest, { params }: TableRouteParams)
       },
     })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
     logger.error(`[${requestId}] Error deleting table:`, error)
     return NextResponse.json({ error: 'Failed to delete table' }, { status: 500 })
   }

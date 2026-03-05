@@ -4,7 +4,6 @@ import { createLogger } from '@sim/logger'
 import { and, eq, sql } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
 import { generateRequestId } from '@/lib/core/utils/request'
 import type { Filter, RowData, Sort, TableSchema } from '@/lib/table'
 import {
@@ -21,8 +20,16 @@ import {
 } from '@/lib/table'
 import { buildFilterClause, buildSortClause } from '@/lib/table/sql'
 import { accessError, checkAccess } from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+} from '@/app/api/v1/middleware'
 
-const logger = createLogger('TableRowsAPI')
+const logger = createLogger('V1TableRowsAPI')
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 const InsertRowSchema = z.object({
   workspaceId: z.string().min(1, 'Workspace ID is required'),
@@ -41,18 +48,26 @@ const QueryRowsSchema = z.object({
   workspaceId: z.string().min(1, 'Workspace ID is required'),
   filter: z.record(z.unknown()).optional(),
   sort: z.record(z.enum(['asc', 'desc'])).optional(),
-  limit: z.coerce
-    .number({ required_error: 'Limit must be a number' })
-    .int('Limit must be an integer')
-    .min(1, 'Limit must be at least 1')
-    .max(TABLE_LIMITS.MAX_QUERY_LIMIT, `Limit cannot exceed ${TABLE_LIMITS.MAX_QUERY_LIMIT}`)
-    .optional()
+  limit: z
+    .preprocess(
+      (val) => (val === null || val === undefined || val === '' ? undefined : Number(val)),
+      z
+        .number({ required_error: 'Limit must be a number' })
+        .int('Limit must be an integer')
+        .min(1, 'Limit must be at least 1')
+        .max(TABLE_LIMITS.MAX_QUERY_LIMIT, `Limit cannot exceed ${TABLE_LIMITS.MAX_QUERY_LIMIT}`)
+        .optional()
+    )
     .default(100),
-  offset: z.coerce
-    .number({ required_error: 'Offset must be a number' })
-    .int('Offset must be an integer')
-    .min(0, 'Offset must be 0 or greater')
-    .optional()
+  offset: z
+    .preprocess(
+      (val) => (val === null || val === undefined || val === '' ? undefined : Number(val)),
+      z
+        .number({ required_error: 'Offset must be a number' })
+        .int('Offset must be an integer')
+        .min(0, 'Offset must be 0 or greater')
+        .optional()
+    )
     .default(0),
 })
 
@@ -101,25 +116,18 @@ interface TableRowsRouteParams {
 async function handleBatchInsert(
   requestId: string,
   tableId: string,
-  body: z.infer<typeof BatchInsertRowsSchema>,
+  validated: z.infer<typeof BatchInsertRowsSchema>,
   userId: string
 ): Promise<NextResponse> {
-  const validated = BatchInsertRowsSchema.parse(body)
-
   const accessResult = await checkAccess(tableId, userId, 'write')
   if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
 
   const { table } = accessResult
 
   if (validated.workspaceId !== table.workspaceId) {
-    logger.warn(
-      `[${requestId}] Workspace ID mismatch for table ${tableId}. Provided: ${validated.workspaceId}, Actual: ${table.workspaceId}`
-    )
     return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
   }
 
-  // Validate rows before calling service (service also validates, but route-level
-  // validation returns structured HTTP responses)
   const validation = await validateBatchRows({
     rows: validated.rows as RowData[],
     schema: table.schema as TableSchema,
@@ -171,16 +179,139 @@ async function handleBatchInsert(
   }
 }
 
-/** POST /api/table/[tableId]/rows - Inserts row(s). Supports single or batch insert. */
-export async function POST(request: NextRequest, { params }: TableRowsRouteParams) {
+/** GET /api/v1/tables/[tableId]/rows — Query rows with filtering, sorting, pagination. */
+export async function GET(request: NextRequest, { params }: TableRowsRouteParams) {
   const requestId = generateRequestId()
-  const { tableId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
+
+    const userId = rateLimit.userId!
+    const { tableId } = await params
+    const { searchParams } = new URL(request.url)
+
+    let filter: Record<string, unknown> | undefined
+    let sort: Sort | undefined
+
+    try {
+      const filterParam = searchParams.get('filter')
+      const sortParam = searchParams.get('sort')
+      if (filterParam) {
+        filter = JSON.parse(filterParam) as Record<string, unknown>
+      }
+      if (sortParam) {
+        sort = JSON.parse(sortParam) as Sort
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid filter or sort JSON' }, { status: 400 })
+    }
+
+    const validated = QueryRowsSchema.parse({
+      workspaceId: searchParams.get('workspaceId'),
+      filter,
+      sort,
+      limit: searchParams.get('limit'),
+      offset: searchParams.get('offset'),
+    })
+
+    const scopeError = checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const accessResult = await checkAccess(tableId, userId, 'read')
+    if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
+
+    const { table } = accessResult
+
+    if (validated.workspaceId !== table.workspaceId) {
+      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+    }
+
+    const baseConditions = [
+      eq(userTableRows.tableId, tableId),
+      eq(userTableRows.workspaceId, validated.workspaceId),
+    ]
+
+    if (validated.filter) {
+      const filterClause = buildFilterClause(validated.filter as Filter, USER_TABLE_ROWS_SQL_NAME)
+      if (filterClause) {
+        baseConditions.push(filterClause)
+      }
+    }
+
+    let query = db
+      .select({
+        id: userTableRows.id,
+        data: userTableRows.data,
+        createdAt: userTableRows.createdAt,
+        updatedAt: userTableRows.updatedAt,
+      })
+      .from(userTableRows)
+      .where(and(...baseConditions))
+
+    if (validated.sort) {
+      const schema = table.schema as TableSchema
+      const sortClause = buildSortClause(validated.sort, USER_TABLE_ROWS_SQL_NAME, schema.columns)
+      if (sortClause) {
+        query = query.orderBy(sortClause) as typeof query
+      }
+    } else {
+      query = query.orderBy(userTableRows.createdAt) as typeof query
+    }
+
+    const countQuery = db
+      .select({ count: sql<number>`count(*)` })
+      .from(userTableRows)
+      .where(and(...baseConditions))
+
+    const [countResult, rows] = await Promise.all([
+      countQuery,
+      query.limit(validated.limit).offset(validated.offset),
+    ])
+    const totalCount = countResult[0].count
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        rows: rows.map((r) => ({
+          id: r.id,
+          data: r.data,
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+          updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : String(r.updatedAt),
+        })),
+        rowCount: rows.length,
+        totalCount: Number(totalCount),
+        limit: validated.limit,
+        offset: validated.offset,
+      },
+    })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    logger.error(`[${requestId}] Error querying rows:`, error)
+    return NextResponse.json({ error: 'Failed to query rows' }, { status: 500 })
+  }
+}
+
+/** POST /api/v1/tables/[tableId]/rows — Insert row(s). Supports single or batch. */
+export async function POST(request: NextRequest, { params }: TableRowsRouteParams) {
+  const requestId = generateRequestId()
+
+  try {
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
+    }
+
+    const userId = rateLimit.userId!
+    const { tableId } = await params
 
     let body: unknown
     try {
@@ -195,31 +326,28 @@ export async function POST(request: NextRequest, { params }: TableRowsRouteParam
       'rows' in body &&
       Array.isArray((body as Record<string, unknown>).rows)
     ) {
-      return handleBatchInsert(
-        requestId,
-        tableId,
-        body as z.infer<typeof BatchInsertRowsSchema>,
-        authResult.userId
-      )
+      const batchValidated = BatchInsertRowsSchema.parse(body)
+      const scopeError = checkWorkspaceScope(rateLimit, batchValidated.workspaceId)
+      if (scopeError) return scopeError
+      return handleBatchInsert(requestId, tableId, batchValidated, userId)
     }
 
     const validated = InsertRowSchema.parse(body)
 
-    const accessResult = await checkAccess(tableId, authResult.userId, 'write')
+    const scopeError = checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const accessResult = await checkAccess(tableId, userId, 'write')
     if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
 
     const { table } = accessResult
 
     if (validated.workspaceId !== table.workspaceId) {
-      logger.warn(
-        `[${requestId}] Workspace ID mismatch for table ${tableId}. Provided: ${validated.workspaceId}, Actual: ${table.workspaceId}`
-      )
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 
     const rowData = validated.data as RowData
 
-    // Validate at route level for structured HTTP error responses
     const validation = await validateRowData({
       rowData,
       schema: table.schema as TableSchema,
@@ -227,13 +355,12 @@ export async function POST(request: NextRequest, { params }: TableRowsRouteParam
     })
     if (!validation.valid) return validation.response
 
-    // Service handles atomic capacity check + insert in a transaction
     const row = await insertRow(
       {
         tableId,
         data: rowData,
         workspaceId: validated.workspaceId,
-        userId: authResult.userId,
+        userId,
       },
       table,
       requestId
@@ -276,141 +403,18 @@ export async function POST(request: NextRequest, { params }: TableRowsRouteParam
   }
 }
 
-/** GET /api/table/[tableId]/rows - Queries rows with filtering, sorting, and pagination. */
-export async function GET(request: NextRequest, { params }: TableRowsRouteParams) {
-  const requestId = generateRequestId()
-  const { tableId } = await params
-
-  try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const workspaceId = searchParams.get('workspaceId')
-    const filterParam = searchParams.get('filter')
-    const sortParam = searchParams.get('sort')
-    const limit = searchParams.get('limit')
-    const offset = searchParams.get('offset')
-
-    let filter: Record<string, unknown> | undefined
-    let sort: Sort | undefined
-
-    try {
-      if (filterParam) {
-        filter = JSON.parse(filterParam) as Record<string, unknown>
-      }
-      if (sortParam) {
-        sort = JSON.parse(sortParam) as Sort
-      }
-    } catch {
-      return NextResponse.json({ error: 'Invalid filter or sort JSON' }, { status: 400 })
-    }
-
-    const validated = QueryRowsSchema.parse({
-      workspaceId,
-      filter,
-      sort,
-      limit,
-      offset,
-    })
-
-    const accessResult = await checkAccess(tableId, authResult.userId, 'read')
-    if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
-
-    const { table } = accessResult
-
-    if (validated.workspaceId !== table.workspaceId) {
-      logger.warn(
-        `[${requestId}] Workspace ID mismatch for table ${tableId}. Provided: ${validated.workspaceId}, Actual: ${table.workspaceId}`
-      )
-      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
-    }
-
-    const baseConditions = [
-      eq(userTableRows.tableId, tableId),
-      eq(userTableRows.workspaceId, validated.workspaceId),
-    ]
-
-    if (validated.filter) {
-      const filterClause = buildFilterClause(validated.filter as Filter, USER_TABLE_ROWS_SQL_NAME)
-      if (filterClause) {
-        baseConditions.push(filterClause)
-      }
-    }
-
-    let query = db
-      .select({
-        id: userTableRows.id,
-        data: userTableRows.data,
-        createdAt: userTableRows.createdAt,
-        updatedAt: userTableRows.updatedAt,
-      })
-      .from(userTableRows)
-      .where(and(...baseConditions))
-
-    if (validated.sort) {
-      const schema = table.schema as TableSchema
-      const sortClause = buildSortClause(validated.sort, USER_TABLE_ROWS_SQL_NAME, schema.columns)
-      if (sortClause) {
-        query = query.orderBy(sortClause) as typeof query
-      }
-    } else {
-      query = query.orderBy(userTableRows.createdAt) as typeof query
-    }
-
-    const countQuery = db
-      .select({ count: sql<number>`count(*)` })
-      .from(userTableRows)
-      .where(and(...baseConditions))
-
-    const [{ count: totalCount }] = await countQuery
-
-    const rows = await query.limit(validated.limit).offset(validated.offset)
-
-    logger.info(
-      `[${requestId}] Queried ${rows.length} rows from table ${tableId} (total: ${totalCount})`
-    )
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        rows: rows.map((r) => ({
-          id: r.id,
-          data: r.data,
-          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
-          updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : String(r.updatedAt),
-        })),
-        rowCount: rows.length,
-        totalCount: Number(totalCount),
-        limit: validated.limit,
-        offset: validated.offset,
-      },
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    logger.error(`[${requestId}] Error querying rows:`, error)
-    return NextResponse.json({ error: 'Failed to query rows' }, { status: 500 })
-  }
-}
-
-/** PUT /api/table/[tableId]/rows - Updates rows matching filter criteria. */
+/** PUT /api/v1/tables/[tableId]/rows — Bulk update rows by filter. */
 export async function PUT(request: NextRequest, { params }: TableRowsRouteParams) {
   const requestId = generateRequestId()
-  const { tableId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
+
+    const userId = rateLimit.userId!
+    const { tableId } = await params
 
     let body: unknown
     try {
@@ -421,22 +425,22 @@ export async function PUT(request: NextRequest, { params }: TableRowsRouteParams
 
     const validated = UpdateRowsByFilterSchema.parse(body)
 
-    const accessResult = await checkAccess(tableId, authResult.userId, 'write')
+    const scopeError = checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const accessResult = await checkAccess(tableId, userId, 'write')
     if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
 
     const { table } = accessResult
 
     if (validated.workspaceId !== table.workspaceId) {
-      logger.warn(
-        `[${requestId}] Workspace ID mismatch for table ${tableId}. Provided: ${validated.workspaceId}, Actual: ${table.workspaceId}`
-      )
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 
     const sizeValidation = validateRowSize(validated.data as RowData)
     if (!sizeValidation.valid) {
       return NextResponse.json(
-        { error: 'Invalid row data', details: sizeValidation.errors },
+        { error: 'Validation error', details: sizeValidation.errors },
         { status: 400 }
       )
     }
@@ -454,16 +458,13 @@ export async function PUT(request: NextRequest, { params }: TableRowsRouteParams
     )
 
     if (result.affectedCount === 0) {
-      return NextResponse.json(
-        {
-          success: true,
-          data: {
-            message: 'No rows matched the filter criteria',
-            updatedCount: 0,
-          },
+      return NextResponse.json({
+        success: true,
+        data: {
+          message: 'No rows matched the filter criteria',
+          updatedCount: 0,
         },
-        { status: 200 }
-      )
+      })
     }
 
     return NextResponse.json({
@@ -500,16 +501,18 @@ export async function PUT(request: NextRequest, { params }: TableRowsRouteParams
   }
 }
 
-/** DELETE /api/table/[tableId]/rows - Deletes rows matching filter criteria or by IDs. */
+/** DELETE /api/v1/tables/[tableId]/rows — Delete rows by filter or IDs. */
 export async function DELETE(request: NextRequest, { params }: TableRowsRouteParams) {
   const requestId = generateRequestId()
-  const { tableId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
+
+    const userId = rateLimit.userId!
+    const { tableId } = await params
 
     let body: unknown
     try {
@@ -520,15 +523,15 @@ export async function DELETE(request: NextRequest, { params }: TableRowsRoutePar
 
     const validated = DeleteRowsRequestSchema.parse(body)
 
-    const accessResult = await checkAccess(tableId, authResult.userId, 'write')
+    const scopeError = checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const accessResult = await checkAccess(tableId, userId, 'write')
     if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
 
     const { table } = accessResult
 
     if (validated.workspaceId !== table.workspaceId) {
-      logger.warn(
-        `[${requestId}] Workspace ID mismatch for table ${tableId}. Provided: ${validated.workspaceId}, Actual: ${table.workspaceId}`
-      )
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 

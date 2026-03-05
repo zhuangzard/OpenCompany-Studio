@@ -4,53 +4,59 @@ import { createLogger } from '@sim/logger'
 import { and, eq } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
 import { generateRequestId } from '@/lib/core/utils/request'
 import type { RowData } from '@/lib/table'
 import { updateRow } from '@/lib/table'
 import { accessError, checkAccess } from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+} from '@/app/api/v1/middleware'
 
-const logger = createLogger('TableRowAPI')
+const logger = createLogger('V1TableRowAPI')
 
-const GetRowSchema = z.object({
-  workspaceId: z.string().min(1, 'Workspace ID is required'),
-})
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 const UpdateRowSchema = z.object({
   workspaceId: z.string().min(1, 'Workspace ID is required'),
   data: z.record(z.unknown(), { required_error: 'Row data is required' }),
 })
 
-const DeleteRowSchema = z.object({
-  workspaceId: z.string().min(1, 'Workspace ID is required'),
-})
-
 interface RowRouteParams {
   params: Promise<{ tableId: string; rowId: string }>
 }
 
-/** GET /api/table/[tableId]/rows/[rowId] - Retrieves a single row. */
+/** GET /api/v1/tables/[tableId]/rows/[rowId] — Get a single row. */
 export async function GET(request: NextRequest, { params }: RowRouteParams) {
   const requestId = generateRequestId()
-  const { tableId, rowId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-row-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
 
+    const userId = rateLimit.userId!
+    const { tableId, rowId } = await params
     const { searchParams } = new URL(request.url)
-    const validated = GetRowSchema.parse({
-      workspaceId: searchParams.get('workspaceId'),
-    })
+    const workspaceId = searchParams.get('workspaceId')
 
-    const result = await checkAccess(tableId, authResult.userId, 'read')
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'workspaceId query parameter is required' },
+        { status: 400 }
+      )
+    }
+
+    const scopeError = checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'read')
     if (!result.ok) return accessError(result, requestId, tableId)
 
-    const { table } = result
-
-    if (table.workspaceId !== validated.workspaceId) {
+    if (result.table.workspaceId !== workspaceId) {
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 
@@ -66,7 +72,7 @@ export async function GET(request: NextRequest, { params }: RowRouteParams) {
         and(
           eq(userTableRows.id, rowId),
           eq(userTableRows.tableId, tableId),
-          eq(userTableRows.workspaceId, validated.workspaceId)
+          eq(userTableRows.workspaceId, workspaceId)
         )
       )
       .limit(1)
@@ -74,8 +80,6 @@ export async function GET(request: NextRequest, { params }: RowRouteParams) {
     if (!row) {
       return NextResponse.json({ error: 'Row not found' }, { status: 404 })
     }
-
-    logger.info(`[${requestId}] Retrieved row ${rowId} from table ${tableId}`)
 
     return NextResponse.json({
       success: true,
@@ -91,28 +95,23 @@ export async function GET(request: NextRequest, { params }: RowRouteParams) {
       },
     })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
     logger.error(`[${requestId}] Error getting row:`, error)
     return NextResponse.json({ error: 'Failed to get row' }, { status: 500 })
   }
 }
 
-/** PATCH /api/table/[tableId]/rows/[rowId] - Updates a single row (supports partial updates). */
+/** PATCH /api/v1/tables/[tableId]/rows/[rowId] — Partial update a single row. */
 export async function PATCH(request: NextRequest, { params }: RowRouteParams) {
   const requestId = generateRequestId()
-  const { tableId, rowId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-row-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
+
+    const userId = rateLimit.userId!
+    const { tableId, rowId } = await params
 
     let body: unknown
     try {
@@ -123,7 +122,10 @@ export async function PATCH(request: NextRequest, { params }: RowRouteParams) {
 
     const validated = UpdateRowSchema.parse(body)
 
-    const result = await checkAccess(tableId, authResult.userId, 'write')
+    const scopeError = checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'write')
     if (!result.ok) return accessError(result, requestId, tableId)
 
     const { table } = result
@@ -132,6 +134,7 @@ export async function PATCH(request: NextRequest, { params }: RowRouteParams) {
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 
+    // Fetch existing row to merge partial update
     const [existingRow] = await db
       .select({ data: userTableRows.data })
       .from(userTableRows)
@@ -211,32 +214,35 @@ export async function PATCH(request: NextRequest, { params }: RowRouteParams) {
   }
 }
 
-/** DELETE /api/table/[tableId]/rows/[rowId] - Deletes a single row. */
+/** DELETE /api/v1/tables/[tableId]/rows/[rowId] — Delete a single row. */
 export async function DELETE(request: NextRequest, { params }: RowRouteParams) {
   const requestId = generateRequestId()
-  const { tableId, rowId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-row-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
 
-    let body: unknown
-    try {
-      body = await request.json()
-    } catch {
-      return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 })
+    const userId = rateLimit.userId!
+    const { tableId, rowId } = await params
+    const { searchParams } = new URL(request.url)
+    const workspaceId = searchParams.get('workspaceId')
+
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'workspaceId query parameter is required' },
+        { status: 400 }
+      )
     }
 
-    const validated = DeleteRowSchema.parse(body)
+    const scopeError = checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
 
-    const result = await checkAccess(tableId, authResult.userId, 'write')
+    const result = await checkAccess(tableId, userId, 'write')
     if (!result.ok) return accessError(result, requestId, tableId)
 
-    const { table } = result
-
-    if (table.workspaceId !== validated.workspaceId) {
+    if (result.table.workspaceId !== workspaceId) {
       return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
     }
 
@@ -246,7 +252,7 @@ export async function DELETE(request: NextRequest, { params }: RowRouteParams) {
         and(
           eq(userTableRows.id, rowId),
           eq(userTableRows.tableId, tableId),
-          eq(userTableRows.workspaceId, validated.workspaceId)
+          eq(userTableRows.workspaceId, workspaceId)
         )
       )
       .returning()
@@ -254,8 +260,6 @@ export async function DELETE(request: NextRequest, { params }: RowRouteParams) {
     if (!deletedRow) {
       return NextResponse.json({ error: 'Row not found' }, { status: 404 })
     }
-
-    logger.info(`[${requestId}] Deleted row ${rowId} from table ${tableId}`)
 
     return NextResponse.json({
       success: true,
@@ -265,13 +269,6 @@ export async function DELETE(request: NextRequest, { params }: RowRouteParams) {
       },
     })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
     logger.error(`[${requestId}] Error deleting row:`, error)
     return NextResponse.json({ error: 'Failed to delete row' }, { status: 500 })
   }

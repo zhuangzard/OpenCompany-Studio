@@ -1,7 +1,7 @@
 import { createLogger } from '@sim/logger'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
+import { AuditAction, AuditResourceType, recordAudit } from '@/lib/audit/log'
 import { generateRequestId } from '@/lib/core/utils/request'
 import {
   createTable,
@@ -12,8 +12,20 @@ import {
 } from '@/lib/table'
 import { getUserEntityPermissions } from '@/lib/workspaces/permissions/utils'
 import { normalizeColumn } from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+} from '@/app/api/v1/middleware'
 
-const logger = createLogger('TableAPI')
+const logger = createLogger('V1TablesAPI')
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+const ListTablesSchema = z.object({
+  workspaceId: z.string().min(1, 'workspaceId query parameter is required'),
+})
 
 const ColumnSchema = z.object({
   name: z
@@ -67,38 +79,88 @@ const CreateTableSchema = z.object({
   workspaceId: z.string().min(1, 'Workspace ID is required'),
 })
 
-const ListTablesSchema = z.object({
-  workspaceId: z.string().min(1, 'Workspace ID is required'),
-})
+/** GET /api/v1/tables — List all tables in a workspace. */
+export async function GET(request: NextRequest) {
+  const requestId = generateRequestId()
 
-interface WorkspaceAccessResult {
-  hasAccess: boolean
-  canWrite: boolean
-}
+  try {
+    const rateLimit = await checkRateLimit(request, 'tables')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
+    }
 
-async function checkWorkspaceAccess(
-  workspaceId: string,
-  userId: string
-): Promise<WorkspaceAccessResult> {
-  const permission = await getUserEntityPermissions(userId, 'workspace', workspaceId)
+    const userId = rateLimit.userId!
+    const { searchParams } = new URL(request.url)
 
-  if (permission === null) {
-    return { hasAccess: false, canWrite: false }
+    const validation = ListTablesSchema.safeParse({
+      workspaceId: searchParams.get('workspaceId'),
+    })
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation error', details: validation.error.errors },
+        { status: 400 }
+      )
+    }
+
+    const { workspaceId } = validation.data
+
+    const scopeError = checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
+
+    const permission = await getUserEntityPermissions(userId, 'workspace', workspaceId)
+    if (permission === null) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    const tables = await listTables(workspaceId)
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        tables: tables.map((t) => {
+          const schemaData = t.schema as TableSchema
+          return {
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            schema: {
+              columns: schemaData.columns.map(normalizeColumn),
+            },
+            rowCount: t.rowCount,
+            maxRows: t.maxRows,
+            createdAt:
+              t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
+            updatedAt:
+              t.updatedAt instanceof Date ? t.updatedAt.toISOString() : String(t.updatedAt),
+          }
+        }),
+        totalCount: tables.length,
+      },
+    })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    logger.error(`[${requestId}] Error listing tables:`, error)
+    return NextResponse.json({ error: 'Failed to list tables' }, { status: 500 })
   }
-
-  const canWrite = permission === 'admin' || permission === 'write'
-  return { hasAccess: true, canWrite }
 }
 
-/** POST /api/table - Creates a new user-defined table. */
+/** POST /api/v1/tables — Create a new table. */
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId()
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'tables')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
+
+    const userId = rateLimit.userId!
 
     let body: unknown
     try {
@@ -109,12 +171,11 @@ export async function POST(request: NextRequest) {
 
     const params = CreateTableSchema.parse(body)
 
-    const { hasAccess, canWrite } = await checkWorkspaceAccess(
-      params.workspaceId,
-      authResult.userId
-    )
+    const scopeError = checkWorkspaceScope(rateLimit, params.workspaceId)
+    if (scopeError) return scopeError
 
-    if (!hasAccess || !canWrite) {
+    const permission = await getUserEntityPermissions(userId, 'workspace', params.workspaceId)
+    if (permission === null || permission === 'read') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
@@ -130,12 +191,23 @@ export async function POST(request: NextRequest) {
         description: params.description,
         schema: normalizedSchema,
         workspaceId: params.workspaceId,
-        userId: authResult.userId,
+        userId,
         maxRows: planLimits.maxRowsPerTable,
         maxTables: planLimits.maxTables,
       },
       requestId
     )
+
+    recordAudit({
+      workspaceId: params.workspaceId,
+      actorId: userId,
+      action: AuditAction.TABLE_CREATED,
+      resourceType: AuditResourceType.TABLE,
+      resourceId: table.id,
+      resourceName: table.name,
+      description: `Created table "${table.name}" via API`,
+      request,
+    })
 
     return NextResponse.json({
       success: true,
@@ -184,74 +256,5 @@ export async function POST(request: NextRequest) {
 
     logger.error(`[${requestId}] Error creating table:`, error)
     return NextResponse.json({ error: 'Failed to create table' }, { status: 500 })
-  }
-}
-
-/** GET /api/table - Lists all tables in a workspace. */
-export async function GET(request: NextRequest) {
-  const requestId = generateRequestId()
-
-  try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const workspaceId = searchParams.get('workspaceId')
-
-    const validation = ListTablesSchema.safeParse({ workspaceId })
-    if (!validation.success) {
-      return NextResponse.json(
-        { error: 'Validation error', details: validation.error.errors },
-        { status: 400 }
-      )
-    }
-
-    const params = validation.data
-
-    const { hasAccess } = await checkWorkspaceAccess(params.workspaceId, authResult.userId)
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-    }
-
-    const tables = await listTables(params.workspaceId)
-
-    logger.info(`[${requestId}] Listed ${tables.length} tables in workspace ${params.workspaceId}`)
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        tables: tables.map((t) => {
-          const schemaData = t.schema as TableSchema
-          return {
-            id: t.id,
-            name: t.name,
-            description: t.description,
-            schema: {
-              columns: schemaData.columns.map(normalizeColumn),
-            },
-            rowCount: t.rowCount,
-            maxRows: t.maxRows,
-            createdAt:
-              t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
-            updatedAt:
-              t.updatedAt instanceof Date ? t.updatedAt.toISOString() : String(t.updatedAt),
-          }
-        }),
-        totalCount: tables.length,
-      },
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    logger.error(`[${requestId}] Error listing tables:`, error)
-    return NextResponse.json({ error: 'Failed to list tables' }, { status: 500 })
   }
 }

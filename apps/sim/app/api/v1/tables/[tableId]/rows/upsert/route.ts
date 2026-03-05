@@ -1,13 +1,20 @@
 import { createLogger } from '@sim/logger'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
 import { generateRequestId } from '@/lib/core/utils/request'
 import type { RowData } from '@/lib/table'
 import { upsertRow } from '@/lib/table'
 import { accessError, checkAccess } from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+} from '@/app/api/v1/middleware'
 
-const logger = createLogger('TableUpsertAPI')
+const logger = createLogger('V1TableUpsertAPI')
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 const UpsertRowSchema = z.object({
   workspaceId: z.string().min(1, 'Workspace ID is required'),
@@ -19,16 +26,18 @@ interface UpsertRouteParams {
   params: Promise<{ tableId: string }>
 }
 
-/** POST /api/table/[tableId]/rows/upsert - Inserts or updates based on unique columns. */
+/** POST /api/v1/tables/[tableId]/rows/upsert — Insert or update a row based on unique columns. */
 export async function POST(request: NextRequest, { params }: UpsertRouteParams) {
   const requestId = generateRequestId()
-  const { tableId } = await params
 
   try {
-    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
-    if (!authResult.success || !authResult.userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
     }
+
+    const userId = rateLimit.userId!
+    const { tableId } = await params
 
     let body: unknown
     try {
@@ -39,7 +48,10 @@ export async function POST(request: NextRequest, { params }: UpsertRouteParams) 
 
     const validated = UpsertRowSchema.parse(body)
 
-    const result = await checkAccess(tableId, authResult.userId, 'write')
+    const scopeError = checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'write')
     if (!result.ok) return accessError(result, requestId, tableId)
 
     const { table } = result
@@ -53,7 +65,7 @@ export async function POST(request: NextRequest, { params }: UpsertRouteParams) 
         tableId,
         workspaceId: validated.workspaceId,
         data: validated.data as RowData,
-        userId: authResult.userId,
+        userId,
         conflictTarget: validated.conflictTarget,
       },
       table,
@@ -89,7 +101,6 @@ export async function POST(request: NextRequest, { params }: UpsertRouteParams) 
 
     const errorMessage = error instanceof Error ? error.message : String(error)
 
-    // Service layer throws descriptive errors for validation/capacity issues
     if (
       errorMessage.includes('unique column') ||
       errorMessage.includes('Unique constraint violation') ||
