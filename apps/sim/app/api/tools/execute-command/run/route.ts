@@ -19,6 +19,22 @@ const logger = createLogger('ExecuteCommandAPI')
 
 const MAX_BUFFER = 10 * 1024 * 1024 // 10MB
 
+const SAFE_ENV_KEYS = ['PATH', 'HOME', 'SHELL', 'USER', 'LOGNAME', 'LANG', 'TERM', 'TZ'] as const
+
+/**
+ * Returns a minimal base environment for child processes.
+ * Only includes POSIX essentials — never server secrets like DATABASE_URL, AUTH_SECRET, etc.
+ */
+function getSafeBaseEnv(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const key of SAFE_ENV_KEYS) {
+    if (process.env[key]) {
+      env[key] = process.env[key]!
+    }
+  }
+  return env
+}
+
 /**
  * Resolves workflow variables (<variable.name>) by replacing them with their actual values
  */
@@ -184,12 +200,12 @@ function executeCommand(
         timeout: options.timeout,
         cwd: options.cwd || undefined,
         maxBuffer: MAX_BUFFER,
-        env: { ...process.env, ...options.env },
+        env: { ...getSafeBaseEnv(), ...options.env },
       },
       (error, stdout, stderr) => {
         if (error) {
           const killed = error.killed ?? false
-          const isMaxBuffer = killed && /maxBuffer/.test(error.message ?? '')
+          const isMaxBuffer = /maxBuffer/i.test(error.message ?? '')
           const exitCode = typeof error.code === 'number' ? error.code : 1
           resolve({
             stdout: stdout.trimEnd(),
