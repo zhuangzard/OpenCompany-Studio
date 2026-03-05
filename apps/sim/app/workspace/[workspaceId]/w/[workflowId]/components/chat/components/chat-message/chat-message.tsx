@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { StreamingIndicator, StreamingText } from '@/components/ui/streaming-text'
+import { StreamingIndicator, StreamingText } from '@/components/ui'
 
 interface ChatAttachment {
   id: string
