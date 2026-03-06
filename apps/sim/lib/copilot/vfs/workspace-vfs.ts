@@ -5,6 +5,7 @@ import {
   copilotChats,
   document,
   form,
+  jobExecutionLogs,
   knowledgeConnector,
   mcpServers as mcpServersTable,
   workflowDeploymentVersion,
@@ -265,6 +266,7 @@ function getStaticComponentFiles(): Map<string, string> {
  *   tables/{name}/meta.json
  *   files/{name}/meta.json
  *   jobs/{title}/meta.json
+ *   jobs/{title}/executions.json
  *   tasks/{title}/session.md
  *   tasks/{title}/chat.json
  *   custom-tools/{name}.json
@@ -1071,6 +1073,35 @@ export class WorkspaceVFS {
             createdAt: job.createdAt,
           })
         )
+
+        try {
+          const execRows = await db
+            .select({
+              id: jobExecutionLogs.id,
+              executionId: jobExecutionLogs.executionId,
+              status: jobExecutionLogs.status,
+              trigger: jobExecutionLogs.trigger,
+              startedAt: jobExecutionLogs.startedAt,
+              endedAt: jobExecutionLogs.endedAt,
+              totalDurationMs: jobExecutionLogs.totalDurationMs,
+            })
+            .from(jobExecutionLogs)
+            .where(eq(jobExecutionLogs.scheduleId, job.id))
+            .orderBy(desc(jobExecutionLogs.startedAt))
+            .limit(5)
+
+          if (execRows.length > 0) {
+            this.files.set(
+              `jobs/${safeName}/executions.json`,
+              serializeRecentExecutions(execRows)
+            )
+          }
+        } catch (err) {
+          logger.warn('Failed to load job execution logs', {
+            jobId: job.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
 
       return jobRows

@@ -701,6 +701,7 @@ const SERVER_TOOLS = new Set<string>([
   'run_from_block',
   'workspace_file',
   'get_execution_summary',
+  'get_job_logs',
 ])
 
 /**
