@@ -310,7 +310,12 @@ export async function generateWorkspaceContext(
               connectorType: knowledgeConnector.connectorType,
             })
             .from(knowledgeConnector)
-            .where(and(inArray(knowledgeConnector.knowledgeBaseId, kbIds), isNull(knowledgeConnector.deletedAt)))
+            .where(
+              and(
+                inArray(knowledgeConnector.knowledgeBaseId, kbIds),
+                isNull(knowledgeConnector.deletedAt)
+              )
+            )
         : []
     const connectorTypesByKb = new Map<string, string[]>()
     for (const row of connectorRows) {

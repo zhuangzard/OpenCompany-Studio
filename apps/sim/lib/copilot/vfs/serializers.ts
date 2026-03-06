@@ -239,13 +239,9 @@ export function serializeConnectorSchema(connector: SerializableConnectorConfig)
  * for the LLM to identify the right type and credential, then read the
  * per-connector schema file for full config details.
  */
-export function serializeConnectorOverview(
-  connectors: SerializableConnectorConfig[]
-): string {
+export function serializeConnectorOverview(connectors: SerializableConnectorConfig[]): string {
   const rows = connectors.map((c) => {
-    const scopes = c.oauth.requiredScopes?.length
-      ? c.oauth.requiredScopes.join(', ')
-      : '(none)'
+    const scopes = c.oauth.requiredScopes?.length ? c.oauth.requiredScopes.join(', ') : '(none)'
     return `| ${c.id} | ${c.name} | ${c.oauth.provider} | ${scopes} |`
   })
 
