@@ -532,6 +532,36 @@ export const workflowSchedule = pgTable(
   }
 )
 
+export const jobExecutionLogs = pgTable(
+  'job_execution_logs',
+  {
+    id: text('id').primaryKey(),
+    scheduleId: text('schedule_id').references(() => workflowSchedule.id, { onDelete: 'set null' }),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    executionId: text('execution_id').notNull(),
+    level: text('level').notNull(),
+    status: text('status').notNull().default('running'),
+    trigger: text('trigger').notNull(),
+    startedAt: timestamp('started_at').notNull(),
+    endedAt: timestamp('ended_at'),
+    totalDurationMs: integer('total_duration_ms'),
+    executionData: jsonb('execution_data').notNull().default('{}'),
+    cost: jsonb('cost'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    scheduleIdIdx: index('job_execution_logs_schedule_id_idx').on(table.scheduleId),
+    workspaceStartedAtIdx: index('job_execution_logs_workspace_started_at_idx').on(
+      table.workspaceId,
+      table.startedAt
+    ),
+    executionIdUnique: uniqueIndex('job_execution_logs_execution_id_unique').on(table.executionId),
+    triggerIdx: index('job_execution_logs_trigger_idx').on(table.trigger),
+  })
+)
+
 export const webhook = pgTable(
   'webhook',
   {

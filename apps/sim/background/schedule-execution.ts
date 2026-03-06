@@ -1,4 +1,4 @@
-import { db, workflow, workflowSchedule } from '@sim/db'
+import { db, jobExecutionLogs, workflow, workflowSchedule } from '@sim/db'
 import { createLogger } from '@sim/logger'
 import { task } from '@trigger.dev/sdk'
 import { Cron } from 'croner'
@@ -641,6 +641,89 @@ function buildJobPrompt(jobRecord: {
   return parts.join('\n')
 }
 
+async function createJobLogEntry(params: {
+  scheduleId: string
+  workspaceId: string
+  jobTitle: string | null
+  startTime: Date
+  endTime: Date
+  durationMs: number
+  success: boolean
+  responseBody?: Record<string, any>
+  errorMessage?: string
+}): Promise<void> {
+  try {
+    const { scheduleId, workspaceId, jobTitle, startTime, endTime, durationMs, success, responseBody } = params
+    const name = jobTitle || 'Mothership Job'
+
+    const toolCallsList = (responseBody?.toolCalls || []).map(
+      (tc: Record<string, unknown>) => ({
+        name: tc.name,
+        input: tc.params || {},
+        output: tc.result ? (typeof tc.result === 'object' ? tc.result : { result: tc.result }) : undefined,
+        error: tc.error,
+        duration: (tc.durationMs as number) || 0,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        status: tc.error ? 'error' : 'success',
+      })
+    )
+
+    const traceSpan = {
+      id: uuidv4(),
+      name,
+      type: 'mothership',
+      duration: durationMs,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      status: success ? 'success' : 'error',
+      output: {
+        content: responseBody?.content || '',
+        model: responseBody?.model || 'mothership',
+        tokens: responseBody?.tokens || {},
+      },
+      toolCalls: toolCallsList.length > 0 ? toolCallsList : undefined,
+      cost: responseBody?.cost || undefined,
+      tokens: responseBody?.tokens || undefined,
+    }
+
+    await db.insert(jobExecutionLogs).values({
+      id: uuidv4(),
+      scheduleId,
+      workspaceId,
+      executionId: uuidv4(),
+      level: success ? 'info' : 'error',
+      status: success ? 'completed' : 'failed',
+      trigger: 'mothership',
+      startedAt: startTime,
+      endedAt: endTime,
+      totalDurationMs: durationMs,
+      executionData: {
+        enhanced: true,
+        traceSpans: [traceSpan],
+        finalOutput: responseBody?.content ? { content: responseBody.content } : undefined,
+        trigger: {
+          type: 'mothership',
+          source: name,
+          timestamp: startTime.toISOString(),
+        },
+      },
+      cost: responseBody?.cost
+        ? {
+            total: responseBody.cost.total || 0,
+            input: responseBody.cost.input || 0,
+            output: responseBody.cost.output || 0,
+            tokens: responseBody.tokens || {},
+          }
+        : null,
+    })
+  } catch (error) {
+    logger.error('Failed to create job log entry', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 export async function executeJobInline(payload: JobExecutionPayload) {
   const requestId = uuidv4().slice(0, 8)
   const now = new Date(payload.now)
@@ -680,25 +763,52 @@ export async function executeJobInline(payload: JobExecutionPayload) {
       chatId: jobRecord.sourceChatId || crypto.randomUUID(),
     }
 
+    const startTime = new Date()
     const response = await fetch(url.toString(), {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     })
+    const endTime = new Date()
+    const durationMs = endTime.getTime() - startTime.getTime()
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error')
+
+      await createJobLogEntry({
+        scheduleId: payload.scheduleId,
+        workspaceId: jobRecord.sourceWorkspaceId,
+        jobTitle: jobRecord.jobTitle,
+        startTime,
+        endTime,
+        durationMs,
+        success: false,
+        errorMessage: errorText,
+      })
+
       throw new Error(`Mothership execution failed (${response.status}): ${errorText}`)
     }
 
+    let responseBody: Record<string, any> = {}
     let wasCompletedByTool = false
     try {
-      const responseBody = await response.json()
+      responseBody = await response.json()
       const toolCalls = responseBody?.toolCalls as Array<{ name?: string }> | undefined
       wasCompletedByTool = toolCalls?.some((tc) => tc.name === 'complete_job') ?? false
     } catch {
       // Response may not be JSON; proceed with normal flow
     }
+
+    await createJobLogEntry({
+      scheduleId: payload.scheduleId,
+      workspaceId: jobRecord.sourceWorkspaceId,
+      jobTitle: jobRecord.jobTitle,
+      startTime,
+      endTime,
+      durationMs,
+      success: true,
+      responseBody,
+    })
 
     const newRunCount = (jobRecord.runCount || 0) + 1
 
