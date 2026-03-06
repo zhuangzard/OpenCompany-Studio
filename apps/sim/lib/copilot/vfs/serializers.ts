@@ -710,6 +710,91 @@ export function serializeIntegrationSchema(tool: ToolConfig): string {
 }
 
 /**
+ * Serialize a trigger schema for VFS components/triggers/{provider}/{id}.json
+ */
+export function serializeTriggerSchema(trigger: {
+  id: string
+  name: string
+  provider: string
+  description: string
+  version: string
+  subBlocks: SubBlockConfig[]
+  outputs: Record<string, unknown>
+  webhook?: { method?: string; headers?: Record<string, string> }
+}): string {
+  return JSON.stringify(
+    {
+      id: trigger.id,
+      name: trigger.name,
+      provider: trigger.provider,
+      description: trigger.description,
+      version: trigger.version,
+      webhook: trigger.webhook || undefined,
+      subBlocks: trigger.subBlocks.map(serializeSubBlock),
+      outputs: trigger.outputs,
+    },
+    null,
+    2
+  )
+}
+
+/**
+ * Serialize a built-in trigger block for VFS components/triggers/sim/{type}.json
+ */
+export function serializeBuiltinTriggerSchema(block: BlockConfig): string {
+  return JSON.stringify(
+    {
+      type: block.type,
+      name: block.name,
+      description: block.description,
+      longDescription: block.longDescription || undefined,
+      category: 'builtin',
+      triggers: block.triggers || undefined,
+      subBlocks: block.subBlocks.map(serializeSubBlock),
+      inputs: block.inputs,
+      outputs: block.outputs,
+    },
+    null,
+    2
+  )
+}
+
+interface TriggerOverviewEntry {
+  id: string
+  name: string
+  provider: string
+  description: string
+}
+
+/**
+ * Serialize a triggers.md overview for VFS components/triggers/triggers.md
+ */
+export function serializeTriggerOverview(
+  builtinTriggers: TriggerOverviewEntry[],
+  externalTriggers: TriggerOverviewEntry[]
+): string {
+  const lines: string[] = ['# Triggers', '']
+
+  lines.push('## Built-in Triggers', '')
+  lines.push('| ID | Name | Description |')
+  lines.push('|----|------|-------------|')
+  for (const t of builtinTriggers) {
+    lines.push(`| ${t.id} | ${t.name} | ${t.description} |`)
+  }
+
+  lines.push('')
+  lines.push('## External Triggers', '')
+  lines.push('| Provider | ID | Name | Description |')
+  lines.push('|----------|----|------|-------------|')
+  for (const t of externalTriggers) {
+    lines.push(`| ${t.provider} | ${t.id} | ${t.name} | ${t.description} |`)
+  }
+
+  lines.push('')
+  return lines.join('\n')
+}
+
+/**
  * Serialize job metadata for VFS jobs/{id}/meta.json
  */
 export function serializeJobMeta(job: {

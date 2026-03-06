@@ -40,6 +40,9 @@ import {
   serializeTableMeta,
   serializeTaskChat,
   serializeTaskSession,
+  serializeBuiltinTriggerSchema,
+  serializeTriggerOverview,
+  serializeTriggerSchema,
   serializeWorkflowMeta,
 } from '@/lib/copilot/vfs/serializers'
 import { buildWorkspaceMd, type WorkspaceMdData } from '@/lib/copilot/workspace-context'
@@ -66,6 +69,7 @@ import { getAllBlocks } from '@/blocks/registry'
 import { CONNECTOR_REGISTRY } from '@/connectors/registry'
 import { tools as toolRegistry } from '@/tools/registry'
 import { getLatestVersionTools, stripVersionSuffix } from '@/tools/utils'
+import { TRIGGER_REGISTRY } from '@/triggers/registry'
 
 const logger = createLogger('WorkspaceVFS')
 
@@ -203,11 +207,43 @@ function getStaticComponentFiles(): Map<string, string> {
     files.set(`knowledgebases/connectors/${cc.id}.json`, serializeConnectorSchema(cc))
   }
 
+  const builtinTriggerBlocks = allBlocks.filter((b) => b.category === 'triggers')
+  for (const block of builtinTriggerBlocks) {
+    files.set(`components/triggers/sim/${block.type}.json`, serializeBuiltinTriggerSchema(block))
+  }
+
+  let externalTriggerCount = 0
+  for (const [triggerId, trigger] of Object.entries(TRIGGER_REGISTRY)) {
+    const path = `components/triggers/${trigger.provider}/${triggerId}.json`
+    files.set(path, serializeTriggerSchema(trigger))
+    externalTriggerCount++
+  }
+
+  files.set(
+    'components/triggers/triggers.md',
+    serializeTriggerOverview(
+      builtinTriggerBlocks.map((b) => ({
+        id: b.type,
+        name: b.name,
+        provider: 'sim',
+        description: b.description,
+      })),
+      Object.entries(TRIGGER_REGISTRY).map(([id, t]) => ({
+        id,
+        name: t.name,
+        provider: t.provider,
+        description: t.description,
+      }))
+    )
+  )
+
   logger.info('Static component files built', {
     blocks: visibleBlocks.length,
     blocksFiltered,
     integrations: integrationCount,
     connectors: connectorConfigs.length,
+    builtinTriggers: builtinTriggerBlocks.length,
+    externalTriggers: externalTriggerCount,
   })
 
   staticComponentFiles = files
@@ -239,6 +275,9 @@ function getStaticComponentFiles(): Map<string, string> {
  *   knowledgebases/connectors/{type}.json    (per-connector config schema)
  *   components/blocks/{type}.json
  *   components/integrations/{service}/{operation}.json
+ *   components/triggers/triggers.md                  (overview of all built-in and external triggers)
+ *   components/triggers/sim/{type}.json               (built-in trigger blocks: start, schedule, webhook)
+ *   components/triggers/{provider}/{id}.json           (external triggers: github, slack, etc.)
  */
 export class WorkspaceVFS {
   private files: Map<string, string> = new Map()
