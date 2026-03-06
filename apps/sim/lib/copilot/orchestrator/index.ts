@@ -39,6 +39,7 @@ export async function orchestrateCopilotStream(
       userId,
       workflowId: '',
       workspaceId,
+      chatId,
       decryptedEnvVars,
     }
   }
