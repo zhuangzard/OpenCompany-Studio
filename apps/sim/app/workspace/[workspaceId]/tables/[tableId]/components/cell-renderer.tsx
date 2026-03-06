@@ -42,7 +42,13 @@ export function CellRenderer({
         }}
       >
         <span className={boolValue ? 'text-green-500' : 'text-[var(--text-tertiary)]'}>
-          {isNull ? <span className='text-[var(--text-muted)] italic'>—</span> : boolValue ? 'true' : 'false'}
+          {isNull ? (
+            <span className='text-[var(--text-muted)] italic'>—</span>
+          ) : boolValue ? (
+            'true'
+          ) : (
+            'false'
+          )}
         </span>
       </button>
     )
@@ -51,7 +57,7 @@ export function CellRenderer({
   if (isNull) {
     return (
       <span
-        className='text-[var(--text-muted)] italic cursor-text'
+        className='cursor-text text-[var(--text-muted)] italic'
         onDoubleClick={(e) => {
           e.stopPropagation()
           onDoubleClick()
@@ -88,7 +94,7 @@ export function CellRenderer({
   if (column.type === 'number') {
     return (
       <span
-        className='font-mono text-[12px] text-[var(--text-secondary)] cursor-text'
+        className='cursor-text font-mono text-[12px] text-[var(--text-secondary)]'
         onDoubleClick={(e) => {
           e.stopPropagation()
           onDoubleClick()
@@ -123,7 +129,7 @@ export function CellRenderer({
     } catch {
       return (
         <span
-          className='text-[var(--text-primary)] cursor-text'
+          className='cursor-text text-[var(--text-primary)]'
           onDoubleClick={(e) => {
             e.stopPropagation()
             onDoubleClick()
@@ -160,7 +166,7 @@ export function CellRenderer({
 
   return (
     <span
-      className='text-[var(--text-primary)] cursor-text'
+      className='cursor-text text-[var(--text-primary)]'
       onDoubleClick={(e) => {
         e.stopPropagation()
         onDoubleClick()

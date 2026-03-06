@@ -11,8 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/emcn'
-import { useUpdateTableRow } from '@/hooks/queries/tables'
 import type { TableRow as TableRowType } from '@/lib/table'
+import { useUpdateTableRow } from '@/hooks/queries/tables'
 import { useContextMenu, useRowSelection, useTableData } from '../hooks'
 import type { CellViewerData, EditingCell, QueryOptions } from '../lib/types'
 import { ActionBar } from './action-bar'
@@ -60,8 +60,11 @@ export function TableViewer() {
 
   const { selectedRows, handleSelectAll, handleSelectRow, clearSelection } = useRowSelection(rows)
 
-  const { contextMenu, handleRowContextMenu: baseHandleRowContextMenu, closeContextMenu } =
-    useContextMenu()
+  const {
+    contextMenu,
+    handleRowContextMenu: baseHandleRowContextMenu,
+    closeContextMenu,
+  } = useContextMenu()
 
   const updateRowMutation = useUpdateTableRow({ workspaceId, tableId })
 
@@ -278,9 +281,7 @@ export function TableViewer() {
                   row={row}
                   columns={columns}
                   isSelected={selectedRows.has(row.id)}
-                  editingColumnName={
-                    editingCell?.rowId === row.id ? editingCell.columnName : null
-                  }
+                  editingColumnName={editingCell?.rowId === row.id ? editingCell.columnName : null}
                   onCellClick={handleCellClick}
                   onDoubleClick={handleCellDoubleClick}
                   onSave={handleInlineSave}

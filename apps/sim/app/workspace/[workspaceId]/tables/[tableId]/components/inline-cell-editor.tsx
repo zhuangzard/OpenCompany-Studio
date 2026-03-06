@@ -57,7 +57,7 @@ export function InlineCellEditor({ value, column, onSave, onCancel }: InlineCell
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={handleSave}
-      className='h-full w-full border-none bg-transparent text-[13px] text-[var(--text-primary)] outline-none ring-1 ring-[var(--accent)] ring-inset rounded-[2px] px-[4px] py-[2px]'
+      className='h-full w-full rounded-[2px] border-none bg-transparent px-[4px] py-[2px] text-[13px] text-[var(--text-primary)] outline-none ring-1 ring-[var(--accent)] ring-inset'
     />
   )
 }

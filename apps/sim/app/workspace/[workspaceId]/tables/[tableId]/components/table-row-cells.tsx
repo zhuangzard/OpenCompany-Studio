@@ -34,18 +34,11 @@ export const TableRowCells = React.memo(function TableRowCells({
 }: TableRowCellsProps) {
   return (
     <TableRow
-      className={cn(
-        'group hover:bg-[var(--surface-4)]',
-        isSelected && 'bg-[var(--surface-5)]'
-      )}
+      className={cn('group hover:bg-[var(--surface-4)]', isSelected && 'bg-[var(--surface-5)]')}
       onContextMenu={(e) => onContextMenu(e, row)}
     >
       <TableCell>
-        <Checkbox
-          size='sm'
-          checked={isSelected}
-          onCheckedChange={() => onSelectRow(row.id)}
-        />
+        <Checkbox size='sm' checked={isSelected} onCheckedChange={() => onSelectRow(row.id)} />
       </TableCell>
       {columns.map((column) => (
         <TableCell key={column.name}>
