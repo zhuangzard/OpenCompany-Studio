@@ -84,7 +84,7 @@ export const jiraConnector: ConnectorConfig = {
   oauth: {
     required: true,
     provider: 'jira',
-    requiredScopes: [],
+    requiredScopes: ['read:jira-work', 'offline_access'],
   },
 
   configFields: [

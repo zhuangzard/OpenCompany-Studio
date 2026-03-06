@@ -113,7 +113,7 @@ export const confluenceConnector: ConnectorConfig = {
   oauth: {
     required: true,
     provider: 'confluence',
-    requiredScopes: [],
+    requiredScopes: ['read:confluence-content.all', 'read:page:confluence', 'offline_access'],
   },
 
   configFields: [
