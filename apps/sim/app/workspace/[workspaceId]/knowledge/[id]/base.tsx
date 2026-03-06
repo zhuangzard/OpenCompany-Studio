@@ -1056,6 +1056,7 @@ export function KnowledgeBase({
           </div>
 
           <ConnectorsSection
+            workspaceId={workspaceId}
             knowledgeBaseId={id}
             connectors={connectors}
             isLoading={isLoadingConnectors}

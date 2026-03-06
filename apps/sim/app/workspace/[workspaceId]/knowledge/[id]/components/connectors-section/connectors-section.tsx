@@ -49,6 +49,7 @@ import { getMissingRequiredScopes } from '@/hooks/use-oauth-scope-status'
 const logger = createLogger('ConnectorsSection')
 
 interface ConnectorsSectionProps {
+  workspaceId: string
   knowledgeBaseId: string
   connectors: ConnectorData[]
   isLoading: boolean
@@ -67,6 +68,7 @@ const STATUS_CONFIG = {
 } as const
 
 export function ConnectorsSection({
+  workspaceId,
   knowledgeBaseId,
   connectors,
   isLoading,
@@ -179,6 +181,7 @@ export function ConnectorsSection({
             <ConnectorCard
               key={connector.id}
               connector={connector}
+              workspaceId={workspaceId}
               knowledgeBaseId={knowledgeBaseId}
               canEdit={canEdit}
               isSyncing={isSyncing}
@@ -265,6 +268,7 @@ export function ConnectorsSection({
 
 interface ConnectorCardProps {
   connector: ConnectorData
+  workspaceId: string
   knowledgeBaseId: string
   canEdit: boolean
   isSyncing: boolean
@@ -278,6 +282,7 @@ interface ConnectorCardProps {
 
 function ConnectorCard({
   connector,
+  workspaceId,
   knowledgeBaseId,
   canEdit,
   isSyncing,
@@ -300,7 +305,7 @@ function ConnectorCard({
   const providerId = serviceId ? getProviderIdFromServiceId(serviceId) : undefined
   const requiredScopes = connectorDef?.oauth.requiredScopes ?? []
 
-  const { data: credentials } = useOAuthCredentials(providerId)
+  const { data: credentials } = useOAuthCredentials(providerId, { workspaceId })
 
   const missingScopes = useMemo(() => {
     if (!credentials || !connector.credentialId) return []
