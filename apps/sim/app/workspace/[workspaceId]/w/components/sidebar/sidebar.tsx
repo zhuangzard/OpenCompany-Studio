@@ -64,6 +64,24 @@ import { useSidebarStore } from '@/stores/sidebar/store'
 
 const logger = createLogger('Sidebar')
 
+function SidebarItemSkeleton() {
+  return (
+    <div className='mx-[2px] flex h-[30px] items-center px-[8px]'>
+      <div className='relative h-[24px] w-full overflow-hidden rounded-[4px] bg-[var(--surface-active)]'>
+        <div
+          className='absolute inset-0'
+          style={{
+            background:
+              'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 60%, transparent 100%)',
+            animation: 'sidebar-shimmer 1.8s linear infinite',
+          }}
+        />
+        <style>{`@keyframes sidebar-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
+      </div>
+    </div>
+  )
+}
+
 /** Event name for sidebar scroll operations - centralized for consistency */
 export const SIDEBAR_SCROLL_EVENT = 'sidebar-scroll-to-item'
 
@@ -358,7 +376,7 @@ export const Sidebar = memo(function Sidebar() {
     [workspaceId]
   )
 
-  const { data: fetchedTasks = [] } = useTasks(workspaceId)
+  const { data: fetchedTasks = [], isLoading: tasksLoading } = useTasks(workspaceId)
 
   const tasks = useMemo(
     () =>
@@ -719,29 +737,33 @@ export const Sidebar = memo(function Sidebar() {
                     </div>
                   </div>
                   <div className='mt-[6px] flex flex-col gap-[2px] px-[8px]'>
-                    {tasks.map((task) => {
-                      const active = task.id !== 'new' && pathname === task.href
-                      const textColor = active
-                        ? 'text-[var(--text-primary)]'
-                        : 'text-[var(--text-secondary)]'
-                      const iconColor = active
-                        ? 'text-[var(--text-primary)]'
-                        : 'text-[var(--text-muted)]'
+                    {tasksLoading ? (
+                      <SidebarItemSkeleton />
+                    ) : (
+                      tasks.map((task) => {
+                        const active = task.id !== 'new' && pathname === task.href
+                        const textColor = active
+                          ? 'text-[var(--text-primary)]'
+                          : 'text-[var(--text-secondary)]'
+                        const iconColor = active
+                          ? 'text-[var(--text-primary)]'
+                          : 'text-[var(--text-muted)]'
 
-                      return (
-                        <Link
-                          key={task.id}
-                          href={task.href}
-                          className={`mx-[2px] flex h-[30px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-active)] ${active ? 'bg-[var(--surface-active)]' : ''}`}
-                          onContextMenu={(e) => handleTaskContextMenu(e, task.href, task.id)}
-                        >
-                          <Blimp className={`h-[16px] w-[16px] flex-shrink-0 ${iconColor}`} />
-                          <div className={`min-w-0 truncate font-base ${textColor}`}>
-                            {task.name}
-                          </div>
-                        </Link>
-                      )
-                    })}
+                        return (
+                          <Link
+                            key={task.id}
+                            href={task.href}
+                            className={`mx-[2px] flex h-[30px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-active)] ${active ? 'bg-[var(--surface-active)]' : ''}`}
+                            onContextMenu={(e) => handleTaskContextMenu(e, task.href, task.id)}
+                          >
+                            <Blimp className={`h-[16px] w-[16px] flex-shrink-0 ${iconColor}`} />
+                            <div className={`min-w-0 truncate font-base ${textColor}`}>
+                              {task.name}
+                            </div>
+                          </Link>
+                        )
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -813,17 +835,21 @@ export const Sidebar = memo(function Sidebar() {
                   </div>
 
                   <div className='mt-[6px] px-[8px]'>
-                    <WorkflowList
-                      regularWorkflows={regularWorkflows}
-                      isLoading={isLoading}
-                      canReorder={canEdit}
-                      handleFileChange={handleImportFileChange}
-                      fileInputRef={fileInputRef}
-                      scrollContainerRef={scrollContainerRef}
-                      onCreateWorkflow={handleCreateWorkflow}
-                      onCreateFolder={handleCreateFolder}
-                      disableCreate={!canEdit || isCreatingWorkflow || isCreatingFolder}
-                    />
+                    {workflowsLoading ? (
+                      <SidebarItemSkeleton />
+                    ) : (
+                      <WorkflowList
+                        regularWorkflows={regularWorkflows}
+                        isLoading={isLoading}
+                        canReorder={canEdit}
+                        handleFileChange={handleImportFileChange}
+                        fileInputRef={fileInputRef}
+                        scrollContainerRef={scrollContainerRef}
+                        onCreateWorkflow={handleCreateWorkflow}
+                        onCreateFolder={handleCreateFolder}
+                        disableCreate={!canEdit || isCreatingWorkflow || isCreatingFolder}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
