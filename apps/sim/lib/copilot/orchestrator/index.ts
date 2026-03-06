@@ -76,6 +76,8 @@ export async function orchestrateCopilotStream(
       toolCalls: buildToolCallSummaries(context),
       chatId: context.chatId,
       errors: context.errors.length ? context.errors : undefined,
+      usage: context.usage,
+      cost: context.cost,
     }
     await options.onComplete?.(result)
     return result

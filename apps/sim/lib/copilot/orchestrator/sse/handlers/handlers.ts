@@ -395,7 +395,23 @@ export const sseHandlers: Record<string, SSEHandler> = {
     context.accumulatedContent += chunk
     addContentBlock(context, { type: 'text', content: chunk })
   },
-  done: (_event, context) => {
+  done: (event, context) => {
+    const d = asRecord(event.data)
+    if (d.usage) {
+      const u = asRecord(d.usage)
+      context.usage = {
+        prompt: (u.input_tokens as number) || 0,
+        completion: (u.output_tokens as number) || 0,
+      }
+    }
+    if (d.cost) {
+      const c = asRecord(d.cost)
+      context.cost = {
+        input: (c.input as number) || 0,
+        output: (c.output as number) || 0,
+        total: (c.total as number) || 0,
+      }
+    }
     context.streamComplete = true
   },
   start: () => {},
