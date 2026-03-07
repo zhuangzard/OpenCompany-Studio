@@ -407,7 +407,9 @@ export const sharepointConnector: ConnectorConfig = {
 
     // Convert files to documents in batches
     const CONCURRENCY = 5
+    const previouslyFetched = totalFetched
     for (let i = 0; i < files.length; i += CONCURRENCY) {
+      if (maxFiles > 0 && previouslyFetched + documents.length >= maxFiles) break
       const batch = files.slice(i, i + CONCURRENCY)
       const results = await Promise.all(
         batch.map((file) => itemToDocument(accessToken, siteId, file, siteName))
@@ -415,7 +417,6 @@ export const sharepointConnector: ConnectorConfig = {
       documents.push(...(results.filter(Boolean) as ExternalDocument[]))
     }
 
-    const previouslyFetched = totalFetched
     totalFetched += documents.length
     if (maxFiles > 0) {
       const remaining = maxFiles - previouslyFetched

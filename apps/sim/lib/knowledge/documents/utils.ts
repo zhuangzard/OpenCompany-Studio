@@ -114,6 +114,17 @@ export async function retryWithExponentialBackoff<T>(
 
       // Use Retry-After if the server told us how long to wait, otherwise exponential backoff
       const retryAfterMs = (lastError as HTTPError)?.retryAfterMs
+
+      // If Retry-After exceeds our maxDelay, the server needs more cooldown than we can afford
+      // to wait — throw immediately rather than hammering with shorter intervals
+      if (retryAfterMs && retryAfterMs > maxDelayMs) {
+        logger.warn(
+          `Retry-After ${retryAfterMs}ms exceeds maxDelayMs ${maxDelayMs}ms — not retrying`,
+          { error }
+        )
+        throw lastError
+      }
+
       const jitter = Math.random() * 0.1 * delay
       const actualDelay = retryAfterMs ?? Math.min(delay + jitter, maxDelayMs)
 
@@ -169,7 +180,7 @@ export async function fetchWithRetry(
         const waitMs = Number.isNaN(Number(retryAfter))
           ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
           : Number(retryAfter) * 1000
-        if (waitMs > 0 && waitMs < 120_000) {
+        if (waitMs > 0) {
           error.retryAfterMs = waitMs
         }
       }
