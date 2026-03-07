@@ -15,7 +15,7 @@ import {
   workflowSchedule,
 } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNull, ne } from 'drizzle-orm'
 import { listApiKeys } from '@/lib/api-key/service'
 import type { DirEntry, GrepMatch, GrepOptions, ReadResult } from '@/lib/copilot/vfs/operations'
 import * as ops from '@/lib/copilot/vfs/operations'
@@ -1048,7 +1048,8 @@ export class WorkspaceVFS {
         .where(
           and(
             eq(workflowSchedule.sourceWorkspaceId, workspaceId),
-            eq(workflowSchedule.sourceType, 'job')
+            eq(workflowSchedule.sourceType, 'job'),
+            ne(workflowSchedule.status, 'completed')
           )
         )
 
