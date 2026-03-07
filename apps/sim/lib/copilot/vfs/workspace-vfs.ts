@@ -266,6 +266,7 @@ function getStaticComponentFiles(): Map<string, string> {
  *   tables/{name}/meta.json
  *   files/{name}/meta.json
  *   jobs/{title}/meta.json
+ *   jobs/{title}/history.json
  *   jobs/{title}/executions.json
  *   tasks/{title}/session.md
  *   tasks/{title}/chat.json
@@ -1073,6 +1074,11 @@ export class WorkspaceVFS {
             createdAt: job.createdAt,
           })
         )
+
+        const history = job.jobHistory as Array<{ timestamp: string; summary: string }> | null
+        if (history && history.length > 0) {
+          this.files.set(`jobs/${safeName}/history.json`, JSON.stringify(history, null, 2))
+        }
 
         try {
           const execRows = await db
