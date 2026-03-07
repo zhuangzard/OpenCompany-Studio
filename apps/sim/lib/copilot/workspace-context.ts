@@ -20,6 +20,19 @@ import { getUsersWithPermissions } from '@/lib/workspaces/permissions/utils'
 
 const logger = createLogger('WorkspaceContext')
 
+const PROVIDER_SERVICES: Record<string, string[]> = {
+  google: ['Gmail', 'Sheets', 'Calendar', 'Drive'],
+  slack: ['Slack'],
+  github: ['GitHub'],
+  microsoft: ['Outlook', 'OneDrive'],
+  linear: ['Linear'],
+  notion: ['Notion'],
+  stripe: ['Stripe'],
+  airtable: ['Airtable'],
+  jira: ['Jira'],
+  confluence: ['Confluence'],
+}
+
 export interface WorkspaceMdData {
   workspace: { id: string; name: string; ownerId: string } | null
   members: Array<{ name: string; email: string; permissionType: string }>
@@ -124,9 +137,13 @@ export function buildWorkspaceMd(data: WorkspaceMdData): string {
 
   if (data.credentials.length > 0) {
     const providers = [...new Set(data.credentials.map((c) => c.providerId))]
-    sections.push(`## Credentials\nConnected: ${providers.join(', ')}`)
+    const lines = providers.map((p) => {
+      const services = PROVIDER_SERVICES[p]
+      return services ? `- ${p} (${services.join(', ')})` : `- ${p}`
+    })
+    sections.push(`## Connected Services\n${lines.join('\n')}`)
   } else {
-    sections.push('## Credentials\n(none)')
+    sections.push('## Connected Services\n(none)')
   }
 
   if (data.customTools && data.customTools.length > 0) {
