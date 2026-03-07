@@ -44,7 +44,7 @@ import {
   useUpdateConnector,
 } from '@/hooks/queries/kb/connectors'
 import { useOAuthCredentials } from '@/hooks/queries/oauth/oauth-credentials'
-import { getMissingRequiredScopes } from '@/hooks/use-oauth-scope-status'
+import { getMissingRequiredScopes } from '@/lib/oauth/utils'
 
 const logger = createLogger('ConnectorsSection')
 

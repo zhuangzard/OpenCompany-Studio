@@ -27,9 +27,17 @@ import {
 import { useDebounce } from '@/hooks/use-debounce'
 
 function getHumanReadable(s: WorkspaceScheduleData) {
+  if (!s.cronExpression && s.nextRunAt) return `Once at ${formatAbsoluteDate(s.nextRunAt)}`
   if (s.cronExpression) return parseCronToHumanReadable(s.cronExpression, s.timezone)
-  if (s.nextRunAt) return `Once at ${formatAbsoluteDate(s.nextRunAt)}`
   return 'Unknown schedule'
+}
+
+function getJobType(job: WorkspaceScheduleData): { label: string; color: string } {
+  if (job.lifecycle === 'until_complete')
+    return { label: 'Until done', color: 'text-amber-600 dark:text-amber-400' }
+  if (!job.cronExpression && job.nextRunAt)
+    return { label: 'One-time', color: 'text-blue-600 dark:text-blue-400' }
+  return { label: 'Recurring', color: 'text-[var(--text-muted)]' }
 }
 
 function TimestampCell({ value }: { value: string | null }) {
@@ -287,50 +295,59 @@ export function ScheduleList() {
                       <TableHead className='w-[30%] px-[12px] py-[8px] text-[13px] text-[var(--text-secondary)]'>
                         Title
                       </TableHead>
-                      <TableHead className='w-[26%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                      <TableHead className='w-[22%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
                         Schedule
                       </TableHead>
-                      <TableHead className='w-[14%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                      <TableHead className='w-[12%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                        Type
+                      </TableHead>
+                      <TableHead className='w-[10%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
                         Status
                       </TableHead>
-                      <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                      <TableHead className='w-[14%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
                         Next Run
                       </TableHead>
-                      <TableHead className='w-[15%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
+                      <TableHead className='w-[12%] px-[12px] py-[8px] text-left text-[13px] text-[var(--text-secondary)]'>
                         Actions
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredJobs.map((job) => (
-                      <TableRow key={job.id} className='hover:bg-[var(--surface-2)]'>
-                        <TableCell className='px-[12px] py-[8px]'>
-                          <span className='min-w-0 truncate font-normal text-[15px] text-[var(--text-primary)]'>
-                            {job.jobTitle || job.sourceTaskName || '—'}
-                          </span>
-                        </TableCell>
-                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                          {getHumanReadable(job)}
-                        </TableCell>
-                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px]'>
-                          <span
-                            className={
-                              job.status === 'active'
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : 'text-[var(--text-muted)]'
-                            }
-                          >
-                            {job.status}
-                          </span>
-                        </TableCell>
-                        <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
-                          <TimestampCell value={job.nextRunAt} />
-                        </TableCell>
-                        <TableCell className='px-[12px] py-[8px]'>
-                          <ScheduleActions item={job} workspaceId={workspaceId} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredJobs.map((job) => {
+                      const jobType = getJobType(job)
+                      return (
+                        <TableRow key={job.id} className='hover:bg-[var(--surface-2)]'>
+                          <TableCell className='px-[12px] py-[8px]'>
+                            <div className='min-w-0 truncate font-normal text-[15px] text-[var(--text-primary)]'>
+                              {job.jobTitle || job.sourceTaskName || '—'}
+                            </div>
+                          </TableCell>
+                          <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
+                            {getHumanReadable(job)}
+                          </TableCell>
+                          <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px]'>
+                            <span className={jobType.color}>{jobType.label}</span>
+                          </TableCell>
+                          <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px]'>
+                            <span
+                              className={
+                                job.status === 'active'
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : 'text-[var(--text-muted)]'
+                              }
+                            >
+                              {job.status}
+                            </span>
+                          </TableCell>
+                          <TableCell className='whitespace-nowrap px-[12px] py-[8px] text-[13px] text-[var(--text-muted)]'>
+                            <TimestampCell value={job.nextRunAt} />
+                          </TableCell>
+                          <TableCell className='px-[12px] py-[8px]'>
+                            <ScheduleActions item={job} workspaceId={workspaceId} />
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </section>

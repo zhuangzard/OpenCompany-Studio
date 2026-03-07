@@ -246,6 +246,7 @@ export async function GET(request: NextRequest) {
         executionData: unknown
         cost: unknown
         createdAt: Date
+        jobTitle: string | null
       }> = []
       let jobCount = 0
 
@@ -349,6 +350,8 @@ export async function GET(request: NextRequest) {
                 params.details === 'full' ? jobExecutionLogs.executionData : sql<null>`NULL`,
               cost: jobExecutionLogs.cost,
               createdAt: jobExecutionLogs.createdAt,
+              jobTitle:
+                sql<string | null>`${jobExecutionLogs.executionData}->'trigger'->>'source'`,
             })
             .from(jobExecutionLogs)
             .where(jobWhere)
@@ -548,6 +551,7 @@ export async function GET(request: NextRequest) {
           createdAt: log.startedAt.toISOString(),
           files: undefined as any,
           workflow: null as any,
+          jobTitle: log.jobTitle,
           pauseSummary: {
             status: null as string | null,
             total: 0,

@@ -427,7 +427,7 @@ export const LogDetails = memo(function LogDetails({
                       })()}
                       <span className='min-w-0 flex-1 truncate font-medium text-[14px] text-[var(--text-secondary)]'>
                         {log.trigger === 'mothership'
-                          ? (log.executionData as any)?.trigger?.source || 'Mothership Job'
+                          ? log.jobTitle || 'Untitled Job'
                           : log.workflow?.name ||
                             (!log.workflowId ? DELETED_WORKFLOW_LABEL : 'Unknown')}
                       </span>
