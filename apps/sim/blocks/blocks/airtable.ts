@@ -88,8 +88,8 @@ export const AirtableBlock: BlockConfig<AirtableResponse> = {
       placeholder: 'Select Airtable table',
       dependsOn: ['credential', 'baseSelector'],
       mode: 'basic',
-      condition: { field: 'operation', value: ['listBases', 'listTables'], not: true },
-      required: { field: 'operation', value: ['listBases', 'listTables'], not: true },
+      condition: { field: 'operation', value: ['listBases', 'listTables', 'getSchema'], not: true },
+      required: { field: 'operation', value: ['listBases', 'listTables', 'getSchema'], not: true },
     },
     {
       id: 'tableId',
