@@ -112,30 +112,28 @@ export async function retryWithExponentialBackoff<T>(
         throw lastError
       }
 
-      // Use Retry-After if the server told us how long to wait, otherwise exponential backoff
+      // Use Retry-After if the server told us how long to wait, otherwise exponential backoff.
+      // Cap Retry-After at maxDelayMs to bound total retry duration (matches Google Cloud SDK behavior).
       const retryAfterMs = (lastError as HTTPError)?.retryAfterMs
+      const cappedRetryAfter = retryAfterMs ? Math.min(retryAfterMs, maxDelayMs) : undefined
 
-      // If Retry-After exceeds our maxDelay, the server needs more cooldown than we can afford
-      // to wait — throw immediately rather than hammering with shorter intervals
       if (retryAfterMs && retryAfterMs > maxDelayMs) {
         logger.warn(
-          `Retry-After ${retryAfterMs}ms exceeds maxDelayMs ${maxDelayMs}ms — not retrying`,
-          { error }
+          `Retry-After ${retryAfterMs}ms exceeds maxDelayMs ${maxDelayMs}ms — capping to ${maxDelayMs}ms`
         )
-        throw lastError
       }
 
       const jitter = Math.random() * 0.1 * delay
-      const actualDelay = retryAfterMs ?? Math.min(delay + jitter, maxDelayMs)
+      const actualDelay = cappedRetryAfter ?? Math.min(delay + jitter, maxDelayMs)
 
       logger.info(
-        `Retrying in ${Math.round(actualDelay)}ms (attempt ${attempt + 1}/${maxRetries + 1})${retryAfterMs ? ' (Retry-After)' : ''}`
+        `Retrying in ${Math.round(actualDelay)}ms (attempt ${attempt + 1}/${maxRetries + 1})${cappedRetryAfter ? ' (Retry-After)' : ''}`
       )
 
       await new Promise((resolve) => setTimeout(resolve, actualDelay))
 
       // Exponential backoff (skip if we used Retry-After)
-      if (!retryAfterMs) {
+      if (!cappedRetryAfter) {
         delay = Math.min(delay * backoffMultiplier, maxDelayMs)
       }
     }
