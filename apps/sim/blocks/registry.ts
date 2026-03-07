@@ -15,6 +15,7 @@ import { AshbyBlock } from '@/blocks/blocks/ashby'
 import { AttioBlock } from '@/blocks/blocks/attio'
 import { BrandfetchBlock } from '@/blocks/blocks/brandfetch'
 import { BrowserUseBlock } from '@/blocks/blocks/browser_use'
+import { CEOAgentBlock } from '@/blocks/blocks/ceo-agent'
 import { CalComBlock } from '@/blocks/blocks/calcom'
 import { CalendlyBlock } from '@/blocks/blocks/calendly'
 import { ChatTriggerBlock } from '@/blocks/blocks/chat_trigger'
@@ -28,6 +29,7 @@ import { CursorBlock, CursorV2Block } from '@/blocks/blocks/cursor'
 import { DatabricksBlock } from '@/blocks/blocks/databricks'
 import { DatadogBlock } from '@/blocks/blocks/datadog'
 import { DevinBlock } from '@/blocks/blocks/devin'
+import { DirectorAgentBlock } from '@/blocks/blocks/director-agent'
 import { DiscordBlock } from '@/blocks/blocks/discord'
 import { DropboxBlock } from '@/blocks/blocks/dropbox'
 import { DSPyBlock } from '@/blocks/blocks/dspy'
@@ -35,11 +37,13 @@ import { DubBlock } from '@/blocks/blocks/dub'
 import { DuckDuckGoBlock } from '@/blocks/blocks/duckduckgo'
 import { DynamoDBBlock } from '@/blocks/blocks/dynamodb'
 import { ElasticsearchBlock } from '@/blocks/blocks/elasticsearch'
+import { EngineerAgentBlock } from '@/blocks/blocks/engineer-agent'
 import { ElevenLabsBlock } from '@/blocks/blocks/elevenlabs'
 import { EnrichBlock } from '@/blocks/blocks/enrich'
 import { EvaluatorBlock } from '@/blocks/blocks/evaluator'
 import { ExaBlock } from '@/blocks/blocks/exa'
 import { FileBlock, FileV2Block, FileV3Block } from '@/blocks/blocks/file'
+import { FinanceAgentBlock } from '@/blocks/blocks/finance-agent'
 import { FirecrawlBlock } from '@/blocks/blocks/firecrawl'
 import { FirefliesBlock, FirefliesV2Block } from '@/blocks/blocks/fireflies'
 import { FunctionBlock } from '@/blocks/blocks/function'
@@ -72,6 +76,7 @@ import { GreenhouseBlock } from '@/blocks/blocks/greenhouse'
 import { GreptileBlock } from '@/blocks/blocks/greptile'
 import { GuardrailsBlock } from '@/blocks/blocks/guardrails'
 import { HexBlock } from '@/blocks/blocks/hex'
+import { HRAgentBlock } from '@/blocks/blocks/hr-agent'
 import { HubSpotBlock } from '@/blocks/blocks/hubspot'
 import { HuggingFaceBlock } from '@/blocks/blocks/huggingface'
 import { HumanInTheLoopBlock } from '@/blocks/blocks/human_in_the_loop'
@@ -88,6 +93,7 @@ import { KalshiBlock, KalshiV2Block } from '@/blocks/blocks/kalshi'
 import { KnowledgeBlock } from '@/blocks/blocks/knowledge'
 import { LangsmithBlock } from '@/blocks/blocks/langsmith'
 import { LemlistBlock } from '@/blocks/blocks/lemlist'
+import { LegalAgentBlock } from '@/blocks/blocks/legal-agent'
 import { LinearBlock } from '@/blocks/blocks/linear'
 import { LinkedInBlock } from '@/blocks/blocks/linkedin'
 import { LinkupBlock } from '@/blocks/blocks/linkup'
@@ -131,9 +137,11 @@ import { RDSBlock } from '@/blocks/blocks/rds'
 import { RedditBlock } from '@/blocks/blocks/reddit'
 import { RedisBlock } from '@/blocks/blocks/redis'
 import { ReductoBlock, ReductoV2Block } from '@/blocks/blocks/reducto'
+import { ResearchAgentBlock } from '@/blocks/blocks/research-agent'
 import { ResendBlock } from '@/blocks/blocks/resend'
 import { ResponseBlock } from '@/blocks/blocks/response'
 import { RevenueCatBlock } from '@/blocks/blocks/revenuecat'
+import { ReviewerAgentBlock } from '@/blocks/blocks/reviewer-agent'
 import { RouterBlock, RouterV2Block } from '@/blocks/blocks/router'
 import { RssBlock } from '@/blocks/blocks/rss'
 import { S3Block } from '@/blocks/blocks/s3'
@@ -150,6 +158,7 @@ import { ShopifyBlock } from '@/blocks/blocks/shopify'
 import { SimilarwebBlock } from '@/blocks/blocks/similarweb'
 import { SlackBlock } from '@/blocks/blocks/slack'
 import { SmtpBlock } from '@/blocks/blocks/smtp'
+import { SOPGateBlock } from '@/blocks/blocks/sop-gate'
 import { SpotifyBlock } from '@/blocks/blocks/spotify'
 import { SQSBlock } from '@/blocks/blocks/sqs'
 import { SSHBlock } from '@/blocks/blocks/ssh'
@@ -210,6 +219,7 @@ export const registry: Record<string, BlockConfig> = {
   attio: AttioBlock,
   brandfetch: BrandfetchBlock,
   browser_use: BrowserUseBlock,
+  ceo_agent: CEOAgentBlock,
   calcom: CalComBlock,
   calendly: CalendlyBlock,
   chat_trigger: ChatTriggerBlock,
@@ -225,6 +235,7 @@ export const registry: Record<string, BlockConfig> = {
   databricks: DatabricksBlock,
   datadog: DatadogBlock,
   devin: DevinBlock,
+  director_agent: DirectorAgentBlock,
   discord: DiscordBlock,
   dropbox: DropboxBlock,
   dspy: DSPyBlock,
@@ -233,12 +244,14 @@ export const registry: Record<string, BlockConfig> = {
   dynamodb: DynamoDBBlock,
   elasticsearch: ElasticsearchBlock,
   elevenlabs: ElevenLabsBlock,
+  engineer_agent: EngineerAgentBlock,
   enrich: EnrichBlock,
   evaluator: EvaluatorBlock,
   exa: ExaBlock,
   file: FileBlock,
   file_v2: FileV2Block,
   file_v3: FileV3Block,
+  finance_agent: FinanceAgentBlock,
   firecrawl: FirecrawlBlock,
   fireflies: FirefliesBlock,
   fireflies_v2: FirefliesV2Block,
@@ -277,6 +290,7 @@ export const registry: Record<string, BlockConfig> = {
   greptile: GreptileBlock,
   guardrails: GuardrailsBlock,
   hex: HexBlock,
+  hr_agent: HRAgentBlock,
   hubspot: HubSpotBlock,
   huggingface: HuggingFaceBlock,
   human_in_the_loop: HumanInTheLoopBlock,
@@ -295,6 +309,7 @@ export const registry: Record<string, BlockConfig> = {
   knowledge: KnowledgeBlock,
   langsmith: LangsmithBlock,
   lemlist: LemlistBlock,
+  legal_agent: LegalAgentBlock,
   linear: LinearBlock,
   linkedin: LinkedInBlock,
   linkup: LinkupBlock,
@@ -340,9 +355,11 @@ export const registry: Record<string, BlockConfig> = {
   redis: RedisBlock,
   reducto: ReductoBlock,
   reducto_v2: ReductoV2Block,
+  research_agent: ResearchAgentBlock,
   resend: ResendBlock,
   response: ResponseBlock,
   revenuecat: RevenueCatBlock,
+  reviewer_agent: ReviewerAgentBlock,
   router: RouterBlock,
   router_v2: RouterV2Block,
   rss: RssBlock,
@@ -360,6 +377,7 @@ export const registry: Record<string, BlockConfig> = {
   similarweb: SimilarwebBlock,
   slack: SlackBlock,
   smtp: SmtpBlock,
+  sop_gate: SOPGateBlock,
   spotify: SpotifyBlock,
   sqs: SQSBlock,
   ssh: SSHBlock,
