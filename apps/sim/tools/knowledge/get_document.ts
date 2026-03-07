@@ -24,8 +24,7 @@ export const knowledgeGetDocumentTool: ToolConfig<any, KnowledgeGetDocumentRespo
   },
 
   request: {
-    url: (params) =>
-      `/api/knowledge/${params.knowledgeBaseId}/documents/${params.documentId}`,
+    url: (params) => `/api/knowledge/${params.knowledgeBaseId}/documents/${params.documentId}`,
     method: 'GET',
     headers: () => ({
       'Content-Type': 'application/json',

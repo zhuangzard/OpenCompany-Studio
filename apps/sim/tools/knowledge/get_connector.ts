@@ -24,8 +24,7 @@ export const knowledgeGetConnectorTool: ToolConfig<any, KnowledgeGetConnectorRes
   },
 
   request: {
-    url: (params) =>
-      `/api/knowledge/${params.knowledgeBaseId}/connectors/${params.connectorId}`,
+    url: (params) => `/api/knowledge/${params.knowledgeBaseId}/connectors/${params.connectorId}`,
     method: 'GET',
     headers: () => ({
       'Content-Type': 'application/json',
