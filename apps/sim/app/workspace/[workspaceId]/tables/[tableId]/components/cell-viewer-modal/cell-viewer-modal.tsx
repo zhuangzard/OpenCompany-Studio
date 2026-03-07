@@ -1,6 +1,6 @@
 import { Copy, X } from 'lucide-react'
 import { Badge, Button, Modal, ModalBody, ModalContent } from '@/components/emcn'
-import type { CellViewerData } from '../lib/types'
+import type { CellViewerData } from '../../types'
 
 interface CellViewerModalProps {
   cellViewer: CellViewerData | null

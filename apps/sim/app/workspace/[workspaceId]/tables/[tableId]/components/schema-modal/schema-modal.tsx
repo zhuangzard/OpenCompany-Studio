@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/emcn'
 import type { ColumnDefinition } from '@/lib/table'
-import { getTypeBadgeVariant } from '../lib/utils'
+import { getTypeBadgeVariant } from '../../utils'
 
 interface SchemaModalProps {
   isOpen: boolean

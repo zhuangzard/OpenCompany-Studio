@@ -142,8 +142,10 @@ export function SettingsSidebar() {
           onClick={handleBack}
           className='group mx-[2px] flex h-[30px] items-center gap-[8px] rounded-[8px] px-[8px] text-[14px] hover:bg-[var(--surface-active)]'
         >
-          <ArrowLeft className='h-[16px] w-[16px] flex-shrink-0 text-[var(--text-muted)]' />
-          <span className='truncate font-base text-[var(--text-secondary)]'>Back</span>
+          <ArrowLeft className='h-[16px] w-[16px] flex-shrink-0 text-[var(--text-icon)]' />
+          <span className='truncate font-[var(--sidebar-font-weight)] text-[var(--text-body)]'>
+            Back
+          </span>
         </button>
       </div>
 
@@ -156,18 +158,12 @@ export function SettingsSidebar() {
           return (
             <div key={key} className='flex flex-shrink-0 flex-col pb-[5px]'>
               <div className='px-[16px] pb-[6px]'>
-                <div className='font-base text-[var(--text-tertiary)] text-small'>{title}</div>
+                <div className='font-base text-[var(--text-icon)] text-small'>{title}</div>
               </div>
               <div className='flex flex-col gap-[2px] px-[8px]'>
                 {sectionItems.map((item) => {
                   const Icon = item.icon
                   const active = activeSection === item.id
-                  const textColor = active
-                    ? 'text-[var(--text-primary)]'
-                    : 'text-[var(--text-secondary)]'
-                  const iconColor = active
-                    ? 'text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)]'
 
                   return (
                     <Link
@@ -178,8 +174,10 @@ export function SettingsSidebar() {
                         active && 'bg-[var(--surface-active)]'
                       )}
                     >
-                      <Icon className={`h-[16px] w-[16px] flex-shrink-0 ${iconColor}`} />
-                      <span className={`truncate font-base ${textColor}`}>{item.label}</span>
+                      <Icon className='h-[16px] w-[16px] flex-shrink-0 text-[var(--text-icon)]' />
+                      <span className='truncate font-[var(--sidebar-font-weight)] text-[var(--text-body)]'>
+                        {item.label}
+                      </span>
                     </Link>
                   )
                 })}

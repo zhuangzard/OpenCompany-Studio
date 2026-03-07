@@ -744,11 +744,12 @@ async function generateOAuthLink(
   }
 
   const { providerId, name: serviceName } = matched
-  const callbackURL = workflowId && workspaceId
-    ? `${baseUrl}/workspace/${workspaceId}/w/${workflowId}`
-    : chatId && workspaceId
-      ? `${baseUrl}/workspace/${workspaceId}/task/${chatId}`
-      : `${baseUrl}/workspace/${workspaceId}`
+  const callbackURL =
+    workflowId && workspaceId
+      ? `${baseUrl}/workspace/${workspaceId}/w/${workflowId}`
+      : chatId && workspaceId
+        ? `${baseUrl}/workspace/${workspaceId}/task/${chatId}`
+        : `${baseUrl}/workspace/${workspaceId}`
 
   // Trello and Shopify use custom auth routes, not genericOAuth
   if (providerId === 'trello') {

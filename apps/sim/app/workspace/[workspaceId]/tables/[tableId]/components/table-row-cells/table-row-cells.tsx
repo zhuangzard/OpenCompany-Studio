@@ -2,8 +2,8 @@ import React from 'react'
 import { Checkbox, TableCell, TableRow } from '@/components/emcn'
 import { cn } from '@/lib/core/utils/cn'
 import type { ColumnDefinition, TableRow as TableRowType } from '@/lib/table'
-import type { CellViewerData } from '../lib/types'
-import { CellRenderer } from './cell-renderer'
+import type { CellViewerData } from '../../types'
+import { CellRenderer } from '../cell-renderer'
 
 interface TableRowCellsProps {
   row: TableRowType

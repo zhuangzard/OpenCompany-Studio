@@ -1,7 +1,7 @@
 'use client'
 
 import { Files as FilesIcon } from 'lucide-react'
-import { FileList } from '@/app/workspace/[workspaceId]/files/components/file-list'
+import { FileList } from '@/app/workspace/[workspaceId]/files/components'
 
 export function Files() {
   return (

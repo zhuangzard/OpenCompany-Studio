@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { ColumnDefinition } from '@/lib/table'
-import { cleanCellValue, formatValueForInput } from '../lib/utils'
+import { cleanCellValue, formatValueForInput } from '../../utils'
 
 interface InlineCellEditorProps {
   value: unknown

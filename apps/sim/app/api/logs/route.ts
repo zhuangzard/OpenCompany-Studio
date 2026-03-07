@@ -8,7 +8,22 @@ import {
   workflowExecutionLogs,
 } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
-import { and, desc, eq, gte, gt, lt, lte, ne, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm'
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getSession } from '@/lib/auth'
@@ -179,10 +194,18 @@ export async function GET(request: NextRequest) {
       }
 
       // Workflow-specific filters exclude job logs entirely
-      const hasWorkflowSpecificFilters = !!(params.workflowIds || params.folderIds || params.workflowName || params.folderName)
+      const hasWorkflowSpecificFilters = !!(
+        params.workflowIds ||
+        params.folderIds ||
+        params.workflowName ||
+        params.folderName
+      )
       // If triggers filter is set and doesn't include 'mothership', skip job logs
       const triggersList = params.triggers?.split(',').filter(Boolean) || []
-      const triggersExcludeJobs = triggersList.length > 0 && !triggersList.includes('all') && !triggersList.includes('mothership')
+      const triggersExcludeJobs =
+        triggersList.length > 0 &&
+        !triggersList.includes('all') &&
+        !triggersList.includes('mothership')
       const includeJobLogs = !hasWorkflowSpecificFilters && !triggersExcludeJobs
 
       const fetchSize = params.limit + params.offset
@@ -269,7 +292,7 @@ export async function GET(request: NextRequest) {
 
         // Search by executionId
         if (params.search) {
-          jobConditions.push(sql`${jobExecutionLogs.executionId} ILIKE ${'%' + params.search + '%'}`)
+          jobConditions.push(sql`${jobExecutionLogs.executionId} ILIKE ${`%${params.search}%`}`)
         }
         if (params.executionId) {
           jobConditions.push(eq(jobExecutionLogs.executionId, params.executionId))
@@ -278,13 +301,23 @@ export async function GET(request: NextRequest) {
         // Cost filter
         if (params.costOperator && params.costValue !== undefined) {
           const costField = sql`(${jobExecutionLogs.cost}->>'total')::numeric`
-          const ops = { '=': sql`=`, '>': sql`>`, '<': sql`<`, '>=': sql`>=`, '<=': sql`<=`, '!=': sql`!=` } as const
+          const ops = {
+            '=': sql`=`,
+            '>': sql`>`,
+            '<': sql`<`,
+            '>=': sql`>=`,
+            '<=': sql`<=`,
+            '!=': sql`!=`,
+          } as const
           jobConditions.push(sql`${costField} ${ops[params.costOperator]} ${params.costValue}`)
         }
 
         // Duration filter
         if (params.durationOperator && params.durationValue !== undefined) {
-          const durationOps: Record<string, (field: typeof jobExecutionLogs.totalDurationMs, val: number) => SQL | undefined> = {
+          const durationOps: Record<
+            string,
+            (field: typeof jobExecutionLogs.totalDurationMs, val: number) => SQL | undefined
+          > = {
             '=': (f, v) => eq(f, v),
             '>': (f, v) => gt(f, v),
             '<': (f, v) => lt(f, v),
@@ -292,7 +325,10 @@ export async function GET(request: NextRequest) {
             '<=': (f, v) => lte(f, v),
             '!=': (f, v) => ne(f, v),
           }
-          const durationCond = durationOps[params.durationOperator]?.(jobExecutionLogs.totalDurationMs, params.durationValue)
+          const durationCond = durationOps[params.durationOperator]?.(
+            jobExecutionLogs.totalDurationMs,
+            params.durationValue
+          )
           if (durationCond) jobConditions.push(durationCond)
         }
 
@@ -309,7 +345,8 @@ export async function GET(request: NextRequest) {
               startedAt: jobExecutionLogs.startedAt,
               endedAt: jobExecutionLogs.endedAt,
               totalDurationMs: jobExecutionLogs.totalDurationMs,
-              executionData: params.details === 'full' ? jobExecutionLogs.executionData : sql<null>`NULL`,
+              executionData:
+                params.details === 'full' ? jobExecutionLogs.executionData : sql<null>`NULL`,
               cost: jobExecutionLogs.cost,
               createdAt: jobExecutionLogs.createdAt,
             })
@@ -317,10 +354,7 @@ export async function GET(request: NextRequest) {
             .where(jobWhere)
             .orderBy(desc(jobExecutionLogs.startedAt))
             .limit(fetchSize),
-          db
-            .select({ count: sql<number>`count(*)` })
-            .from(jobExecutionLogs)
-            .where(jobWhere),
+          db.select({ count: sql<number>`count(*)` }).from(jobExecutionLogs).where(jobWhere),
         ])
 
         jobLogs = jobLogResults as typeof jobLogs
@@ -530,10 +564,7 @@ export async function GET(request: NextRequest) {
                   trigger: execData.trigger,
                 }
               : undefined,
-          cost:
-            params.details === 'full'
-              ? costSummary
-              : { total: costSummary?.total || 0 },
+          cost: params.details === 'full' ? costSummary : { total: costSummary?.total || 0 },
           hasPendingPause: false,
         }
       })

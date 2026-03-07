@@ -23,7 +23,7 @@ import {
   useDeleteTableRows,
   useUpdateTableRow,
 } from '@/hooks/queries/tables'
-import { cleanCellValue, formatValueForInput } from '../lib/utils'
+import { cleanCellValue, formatValueForInput } from '../../utils'
 
 const logger = createLogger('RowModal')
 

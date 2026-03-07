@@ -653,21 +653,32 @@ async function createJobLogEntry(params: {
   errorMessage?: string
 }): Promise<void> {
   try {
-    const { scheduleId, workspaceId, jobTitle, startTime, endTime, durationMs, success, responseBody } = params
+    const {
+      scheduleId,
+      workspaceId,
+      jobTitle,
+      startTime,
+      endTime,
+      durationMs,
+      success,
+      responseBody,
+    } = params
     const name = jobTitle || 'Mothership Job'
 
-    const toolCallsList = (responseBody?.toolCalls || []).map(
-      (tc: Record<string, unknown>) => ({
-        name: tc.name,
-        input: tc.params || {},
-        output: tc.result ? (typeof tc.result === 'object' ? tc.result : { result: tc.result }) : undefined,
-        error: tc.error,
-        duration: (tc.durationMs as number) || 0,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        status: tc.error ? 'error' : 'success',
-      })
-    )
+    const toolCallsList = (responseBody?.toolCalls || []).map((tc: Record<string, unknown>) => ({
+      name: tc.name,
+      input: tc.params || {},
+      output: tc.result
+        ? typeof tc.result === 'object'
+          ? tc.result
+          : { result: tc.result }
+        : undefined,
+      error: tc.error,
+      duration: (tc.durationMs as number) || 0,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      status: tc.error ? 'error' : 'success',
+    }))
 
     const traceSpan = {
       id: uuidv4(),

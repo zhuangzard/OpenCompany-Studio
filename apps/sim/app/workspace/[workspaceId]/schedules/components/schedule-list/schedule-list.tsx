@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Calendar, Pause, Play, Search } from 'lucide-react'
+import { Pause, Play, Search } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Button,
@@ -124,7 +124,7 @@ function ScheduleActions({
   )
 }
 
-export function SchedulesView() {
+export function ScheduleList() {
   const params = useParams()
   const router = useRouter()
   const workspaceId = params.workspaceId as string
@@ -165,63 +165,10 @@ export function SchedulesView() {
     )
   }, [jobs, debouncedSearchQuery])
 
-  return (
-    <div className='flex h-full flex-1 flex-col'>
-      <div className='flex flex-1 overflow-hidden'>
-        <div className='flex flex-1 flex-col overflow-auto bg-white px-[24px] pt-[28px] pb-[24px] dark:bg-[var(--bg)]'>
-          {/* Header */}
-          <div>
-            <div className='flex items-start gap-[12px]'>
-              <div className='flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[#F59E0B] bg-[#FFFBEB] dark:border-[#B45309] dark:bg-[#451A03]'>
-                <Calendar className='h-[14px] w-[14px] text-[#F59E0B] dark:text-[#FBBF24]' />
-              </div>
-              <h1 className='font-medium text-[18px]'>Schedules</h1>
-            </div>
-            <p className='mt-[10px] text-[14px] text-[var(--text-tertiary)]'>
-              View all scheduled workflows and jobs in your workspace.
-            </p>
-          </div>
+  const handleScheduleClick = (workflowId: string) => {
+    router.push(`/workspace/${workspaceId}/w/${workflowId}`)
+  }
 
-          <ScheduleList
-            isLoading={isLoading}
-            error={error}
-            searchQuery={searchQuery}
-            debouncedSearchQuery={debouncedSearchQuery}
-            onSearchChange={setSearchQuery}
-            filteredSchedules={filteredSchedules}
-            filteredJobs={filteredJobs}
-            workspaceId={workspaceId}
-            onScheduleClick={(workflowId) =>
-              router.push(`/workspace/${workspaceId}/w/${workflowId}`)
-            }
-          />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ScheduleList({
-  isLoading,
-  error,
-  searchQuery,
-  debouncedSearchQuery,
-  onSearchChange,
-  filteredSchedules,
-  filteredJobs,
-  workspaceId,
-  onScheduleClick,
-}: {
-  isLoading: boolean
-  error: Error | null
-  searchQuery: string
-  debouncedSearchQuery: string
-  onSearchChange: (value: string) => void
-  filteredSchedules: WorkspaceScheduleData[]
-  filteredJobs: WorkspaceScheduleData[]
-  workspaceId: string
-  onScheduleClick: (workflowId: string) => void
-}) {
   return (
     <div className='flex h-full flex-col'>
       {/* Search */}
@@ -231,7 +178,7 @@ function ScheduleList({
           <Input
             placeholder='Search'
             value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className='flex-1 border-0 bg-transparent px-0 font-medium text-[var(--text-secondary)] text-small leading-none placeholder:text-[var(--text-subtle)] focus-visible:ring-0 focus-visible:ring-offset-0'
           />
         </div>
@@ -285,7 +232,7 @@ function ScheduleList({
                         key={schedule.id}
                         className='cursor-pointer hover:bg-[var(--surface-2)]'
                         onClick={() => {
-                          if (schedule.workflowId) onScheduleClick(schedule.workflowId)
+                          if (schedule.workflowId) handleScheduleClick(schedule.workflowId)
                         }}
                       >
                         <TableCell className='px-[12px] py-[8px]'>

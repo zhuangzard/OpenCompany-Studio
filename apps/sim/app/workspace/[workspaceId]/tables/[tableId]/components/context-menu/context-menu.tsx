@@ -6,7 +6,7 @@ import {
   PopoverDivider,
   PopoverItem,
 } from '@/components/emcn'
-import type { ContextMenuState } from '../lib/types'
+import type { ContextMenuState } from '../../types'
 
 interface ContextMenuProps {
   contextMenu: ContextMenuState

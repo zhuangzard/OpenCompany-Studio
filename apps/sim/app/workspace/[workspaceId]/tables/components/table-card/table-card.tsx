@@ -16,11 +16,11 @@ import {
 } from '@/components/emcn'
 import type { TableDefinition } from '@/lib/table'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
+import { SchemaModal } from '@/app/workspace/[workspaceId]/tables/[tableId]/components'
 import { TableContextMenu } from '@/app/workspace/[workspaceId]/tables/components/table-context-menu'
+import { formatAbsoluteDate, formatRelativeTime } from '@/app/workspace/[workspaceId]/tables/utils'
 import { useContextMenu } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks'
 import { useDeleteTable } from '@/hooks/queries/tables'
-import { SchemaModal } from '../[tableId]/components/schema-modal'
-import { formatAbsoluteDate, formatRelativeTime } from '../lib/utils'
 
 const logger = createLogger('TableCard')
 

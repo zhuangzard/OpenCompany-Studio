@@ -1,7 +1,7 @@
 import type { ColumnDefinition } from '@/lib/table'
-import { STRING_TRUNCATE_LENGTH } from '../lib/constants'
-import type { CellViewerData } from '../lib/types'
-import { InlineCellEditor } from './inline-cell-editor'
+import { STRING_TRUNCATE_LENGTH } from '../../constants'
+import type { CellViewerData } from '../../types'
+import { InlineCellEditor } from '../inline-cell-editor'
 
 interface CellRendererProps {
   value: unknown

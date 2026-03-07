@@ -71,7 +71,11 @@ function extractOutputAndError(executionData: any): {
 
   return {
     output,
-    error: errorMsg ? (typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)) : undefined,
+    error: errorMsg
+      ? typeof errorMsg === 'string'
+        ? errorMsg
+        : JSON.stringify(errorMsg)
+      : undefined,
     toolCalls,
     cost,
     tokens,
@@ -151,9 +155,7 @@ export const getJobLogsServerTool: BaseServerTool<GetJobLogsArgs, JobLogEntry[]>
         if (details.cost) entry.cost = details.cost
         if (details.tokens) entry.tokens = details.tokens
       } else {
-        const errorMsg =
-          executionData?.error ||
-          executionData?.traceSpans?.[0]?.output?.error
+        const errorMsg = executionData?.error || executionData?.traceSpans?.[0]?.output?.error
         if (row.status === 'error' && errorMsg) {
           entry.error = typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
         }
