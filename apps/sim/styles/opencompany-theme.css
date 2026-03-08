@@ -1,0 +1,151 @@
+/* OpenCompany Theme — CSS Variables (inspired by xyOps color system) */
+:root {
+  --oc-background: rgb(240, 244, 248);
+  --oc-box-bg: rgb(255, 255, 255);
+  --oc-border: rgb(210, 218, 226);
+  --oc-shadow: rgba(0, 0, 0, 0.08);
+  --oc-text: rgb(30, 40, 55);
+  --oc-label: rgb(120, 130, 145);
+
+  --oc-theme: rgb(54, 126, 208);
+  --oc-theme-half: rgba(54, 126, 208, 0.5);
+
+  /* Role colors */
+  --oc-ceo: rgb(245, 158, 11);
+  --oc-director: rgb(139, 92, 246);
+  --oc-engineer: rgb(59, 130, 246);
+  --oc-reviewer: rgb(16, 185, 129);
+  --oc-research: rgb(6, 182, 212);
+  --oc-hr: rgb(244, 63, 94);
+  --oc-finance: rgb(20, 184, 166);
+  --oc-legal: rgb(168, 85, 247);
+
+  /* Status colors */
+  --oc-active: rgb(34, 197, 94);
+  --oc-idle: rgb(156, 163, 175);
+  --oc-error: rgb(239, 68, 68);
+  --oc-warning: rgb(245, 158, 11);
+  --oc-blocked: rgb(239, 68, 68);
+
+  /* Status backgrounds (color-mix) */
+  --oc-active-bg: color-mix(in srgb, var(--oc-active) 15%, transparent);
+  --oc-error-bg: color-mix(in srgb, var(--oc-error) 15%, transparent);
+  --oc-warning-bg: color-mix(in srgb, var(--oc-warning) 15%, transparent);
+
+  /* Canvas */
+  --oc-canvas-dot: rgba(100, 116, 139, 0.3);
+  --oc-canvas-dot-size: 1.5px;
+  --oc-canvas-dot-gap: 20px;
+}
+
+/* Dark mode */
+.dark {
+  --oc-background: rgb(15, 23, 42);
+  --oc-box-bg: rgb(30, 41, 59);
+  --oc-border: rgb(51, 65, 85);
+  --oc-shadow: rgba(0, 0, 0, 0);
+  --oc-text: rgb(226, 232, 240);
+  --oc-label: rgb(148, 163, 184);
+  --oc-canvas-dot: rgba(148, 163, 184, 0.2);
+}
+
+/* High contrast */
+.highcon {
+  --oc-border: rgb(163, 168, 180);
+  --oc-box-bg: rgb(255, 255, 255);
+  --oc-text: rgb(19, 22, 27);
+}
+
+/* Agent working: diagonal stripe animation (xyOps wf_active) */
+.oc-node-working {
+  border: 2px solid transparent;
+  background: linear-gradient(
+    135deg,
+    var(--oc-box-bg) 25%,
+    color-mix(in srgb, var(--oc-active) 8%, var(--oc-box-bg)) 25%,
+    color-mix(in srgb, var(--oc-active) 8%, var(--oc-box-bg)) 50%,
+    var(--oc-box-bg) 50%,
+    var(--oc-box-bg) 75%,
+    color-mix(in srgb, var(--oc-active) 8%, var(--oc-box-bg)) 75%
+  );
+  background-size: 30px 30px;
+  animation: oc-working 1s linear infinite;
+}
+
+@keyframes oc-working {
+  from { background-position: 0 0; }
+  to { background-position: 30px 30px; }
+}
+
+/* Task completed: green glow flash */
+.oc-node-completed {
+  animation: oc-flash-green 1.5s ease-in-out;
+}
+
+@keyframes oc-flash-green {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 12px 4px var(--oc-active); }
+}
+
+/* Error state: dashed red border blink */
+.oc-node-error {
+  border: 2px dashed var(--oc-error);
+  animation: oc-flash-red 1.2s ease-in-out infinite;
+}
+
+@keyframes oc-flash-red {
+  0%, 100% { border-color: var(--oc-error); }
+  50% { border-color: transparent; }
+}
+
+/* Idle: reduced opacity */
+.oc-node-idle {
+  opacity: 0.65;
+  transition: opacity 0.3s ease;
+}
+.oc-node-idle:hover {
+  opacity: 1;
+}
+
+/* SOP blocked connection */
+.oc-connection-blocked {
+  stroke: var(--oc-error);
+  stroke-dasharray: 8, 4;
+  opacity: 0.6;
+}
+
+/* Canvas dot background */
+.oc-canvas-bg {
+  background-color: var(--oc-background);
+  background-image: radial-gradient(
+    circle, var(--oc-canvas-dot) var(--oc-canvas-dot-size), transparent var(--oc-canvas-dot-size)
+  );
+  background-size: var(--oc-canvas-dot-gap) var(--oc-canvas-dot-gap);
+}
+
+/* Stats grid (xyOps .dash_grid responsive layout) */
+.oc-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 20px;
+}
+@media (max-width: 1600px) { .oc-stats-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1024px) { .oc-stats-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 768px)  { .oc-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.oc-stat-card {
+  padding: 16px 20px;
+  background: var(--oc-box-bg);
+  border: 1px solid var(--oc-border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 8px var(--oc-shadow);
+  cursor: pointer;
+  transition: 0.2s ease all;
+}
+.oc-stat-card:hover {
+  border-color: var(--oc-theme-half);
+  box-shadow: 2px 2px 12px var(--oc-shadow);
+}
+.oc-stat-card.warning .oc-stat-value {
+  color: var(--oc-error);
+}
